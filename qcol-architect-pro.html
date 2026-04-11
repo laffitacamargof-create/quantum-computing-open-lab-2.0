@@ -695,126 +695,283 @@ function buildTextOut(text){
 }
 
 function buildCircuitOut(text){
-  if(!text.trim())return'';
-  // ── Parse the ASCII circuit and render as SVG (like the Quantum Architect) ──
-  const lines=text.split('\n').filter(l=>l.trim());
-  // Identify qubit wires
-  const wireLines=lines.filter(l=>/q_?\d+\s*:|q\[\d+\]\s*:|qr\[\d+\]\s*:/.test(l));
-  if(wireLines.length===0){
-    // No parseable SVG — render colorized ASCII
-    let colored=escH(text);
-    colored=colored.replace(/(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/g,'<span style="color:#bd93f9;font-weight:700">$1</span>:');
-    colored=colored.replace(/┤\s*([A-Za-z0-9√π/]+)\s*[├┤]/g,(m,g)=>`┤<span style="color:#00aaff;font-weight:700;background:rgba(0,136,255,.15);padding:0 2px;border-radius:2px"> ${g} </span>┤`);
-    colored=colored.replace(/\b(M)\b/g,'<span style="color:#ff9580;font-weight:700">$1</span>');
-    colored=colored.replace(/(c:\s*\d+\/)/g,'<span style="color:#636e8a">$1</span>');
-    return`<div style="padding:.4rem 0 .3rem .5rem;background:#020c18;border-top:1px solid rgba(0,136,255,.1);">
-      <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.1rem .2rem .25rem;letter-spacing:.05em;">⚛ DIAGRAMA DEL CIRCUITO</div>
-      <div class="out-circuit-text">${colored}</div>
+  if(!text.trim()) return '';
+
+  const allLines = text.split('\n');
+  // Detectar líneas de qubit: q_0: o q[0]: o qr[0]:
+  const wireLines = allLines.filter(l => /^\s*(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/.test(l));
+
+  // Sin qubit wires reconocibles → ASCII coloreado de fallback
+  if(wireLines.length === 0){
+    let col = escH(text);
+    col = col.replace(/(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/g,
+      '<span style="color:#bd93f9;font-weight:700">$1</span>:');
+    col = col.replace(/┤\s*([A-Za-z0-9√Rπ/.+\-]+)\s*[├┤]/g,
+      (m,g)=>`┤<span style="color:#00aaff;font-weight:700"> ${g} </span>┤`);
+    col = col.replace(/─(M)─/g,'─<span style="color:#ff9580;font-weight:700">$1</span>─');
+    col = col.replace(/(c:\s*\d+\/)/g,'<span style="color:#636e8a">$1</span>');
+    return `<div style="padding:.4rem .5rem;background:#020c18;border-top:1px solid rgba(0,136,255,.1);">
+      <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.1rem 0 .3rem;letter-spacing:.05em;">⚛ DIAGRAMA DEL CIRCUITO</div>
+      <div class="out-circuit-text">${col}</div>
     </div>`;
   }
 
-  // ── SVG Circuit Renderer ──────────────────────────────────────
-  const ROW=52, GATE_W=44, GATE_H=38, PAD_LEFT=56, PAD_RIGHT=20, PAD_TOP=14;
-  const nQubits=wireLines.length;
+  // ── PARSER COMPLETO DE PUERTAS ────────────────────────────────
+  // Extraemos la parte de contenido de cada qubit (después del ":")
+  const nQ = wireLines.length;
+  const wireContents = wireLines.map(l => {
+    const m = l.match(/^.*?:\s*(.*)/);
+    return m ? m[1] : '';
+  });
 
-  // Extract gate columns from wire lines
-  // Each wire line looks like: "q_0: ─H─┤ X ├─────M─"
-  // We parse gate names per position
-  function parseGates(wireLine){
-    // Remove qubit label
-    const content=wireLine.replace(/^q_?\d+\s*:\s*|^q\[\d+\]\s*:\s*|^qr\[\d+\]\s*:\s*/,'');
-    const gates=[];
-    // Match gate tokens: boxes like ┤ H ├ or ─■─ or ─⊕─ or ─M─ etc.
-    let m;
-    const re=/┤\s*([A-Za-z0-9√Rπ/×.+−-]+(?:\([^)]*\))?)\s*[├┤]|─(M)─|─(■)─|─(⊕)─|─(×)─/g;
-    re.lastIndex=0;
-    while((m=re.exec(content))!==null){
-      const name=m[1]||m[2]||m[3]||m[4]||m[5]||'?';
-      gates.push({name:name.trim(),pos:m.index});
-    }
-    return gates;
-  }
+  // Para encontrar columnas de puertas usamos la posición de caracteres en el texto
+  // Cada "columna" es una posición X en el wire
+  // Recorremos carácter a carácter la wire más larga buscando tokens de puerta
 
-  // Build per-qubit gate list
-  const qubitGates=wireLines.map(l=>parseGates(l));
-  // Find max columns
-  const maxCols=Math.max(1,...qubitGates.map(g=>g.length));
+  // Primero normalizamos longitudes rellenando con espacios
+  const maxLen = Math.max(...wireContents.map(w => w.length));
+  const padded = wireContents.map(w => w.padEnd(maxLen, '─'));
 
-  const W=PAD_LEFT+maxCols*(GATE_W+16)+PAD_RIGHT+20;
-  const H=PAD_TOP+nQubits*ROW+20;
+  // Detectar posiciones de puertas por columna
+  // Una puerta puede ser: ┤ X ├  ─■─  ─⊕─  ─×─  ─M─  o un bloque continuo
+  // Estrategia: en cada posición X, buscar qué tiene cada qubit
+  // Generamos lista de "columnas de puertas" agrupadas
 
-  // Gate color map
-  const GCOL={
-    H:'#1a5fb4',X:'#c01c28',Y:'#7a3e99',Z:'#1c71d8',
-    S:'#c64600',T:'#26a269','√X':'#c01c28','SX':'#c01c28',
-    Rx:'#0077c2',Ry:'#005f6a',Rz:'#5e35b1',
-    CX:'#007070',CZ:'#00695c',SWAP:'#1565c0',
-    CCX:'#005f6a',M:'#6d4c41','■':'#0088ff','⊕':'#007070',
-    '×':'#1565c0',DEFAULT:'#2a4a8a'
-  };
-  function gColor(name){return GCOL[name]||GCOL[name.split('(')[0]]||GCOL.DEFAULT;}
-
-  let svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" style="max-width:100%;background:#020c18;border-radius:6px;display:block;">`;
-  svg+=`<defs><filter id="glow"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
-
-  // Draw wires
-  for(let q=0;q<nQubits;q++){
-    const y=PAD_TOP+q*ROW+ROW/2;
-    const lbl=wireLines[q].match(/^(q_?\d+|q\[\d+\]|qr\[\d+\])/)?.[1]||`q[${q}]`;
-    // Wire line
-    svg+=`<line x1="${PAD_LEFT-10}" y1="${y}" x2="${W-PAD_RIGHT}" y2="${y}" stroke="rgba(0,136,255,.25)" stroke-width="1.5"/>`;
-    // Qubit label
-    svg+=`<text x="${PAD_LEFT-14}" y="${y+4}" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="11" fill="#bd93f9">${escH(lbl)}</text>`;
-  }
-
-  // Draw gates per qubit
-  qubitGates.forEach((gates,qi)=>{
-    const y=PAD_TOP+qi*ROW;
-    gates.forEach((g,col)=>{
-      const x=PAD_LEFT+col*(GATE_W+16);
-      const cx=x+GATE_W/2;
-      const cy=y+ROW/2;
-      const c=gColor(g.name);
-
-      if(g.name==='M'){
-        // Medidor: caja especial
-        svg+=`<rect x="${x}" y="${y+ROW/2-GATE_H/2}" width="${GATE_W}" height="${GATE_H}" rx="5" fill="rgba(109,76,65,.25)" stroke="${c}" stroke-width="1.5"/>`;
-        svg+=`<text x="${cx}" y="${cy+4}" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="13" font-weight="bold" fill="#ff9580">M</text>`;
-      } else if(g.name==='■'){
-        // Control dot
-        svg+=`<circle cx="${cx}" cy="${cy}" r="6" fill="#0088ff" filter="url(#glow)"/>`;
-      } else if(g.name==='⊕'){
-        // CNOT target
-        svg+=`<circle cx="${cx}" cy="${cy}" r="12" fill="none" stroke="#00aaff" stroke-width="2"/>`;
-        svg+=`<line x1="${cx-12}" y1="${cy}" x2="${cx+12}" y2="${cy}" stroke="#00aaff" stroke-width="1.5"/>`;
-        svg+=`<line x1="${cx}" y1="${cy-12}" x2="${cx}" y2="${cy+12}" stroke="#00aaff" stroke-width="1.5"/>`;
-      } else if(g.name==='×'){
-        // SWAP target
-        svg+=`<line x1="${cx-8}" y1="${cy-8}" x2="${cx+8}" y2="${cy+8}" stroke="#1565c0" stroke-width="2.5"/>`;
-        svg+=`<line x1="${cx+8}" y1="${cy-8}" x2="${cx-8}" y2="${cy+8}" stroke="#1565c0" stroke-width="2.5"/>`;
+  function tokenizeWire(wire){
+    // Devuelve array de {start, end, name}
+    const tokens = [];
+    let i = 0;
+    while(i < wire.length){
+      const ch = wire[i];
+      // Caja estándar: ┤...├  o ┤...┤
+      if(ch === '┤'){
+        const end = wire.indexOf('├', i+1) !== -1 && wire.indexOf('├', i+1) < wire.indexOf('┤', i+1)
+          ? wire.indexOf('├', i+1)
+          : wire.indexOf('┤', i+1);
+        if(end > i){
+          const name = wire.slice(i+1, end).trim().replace(/\s+/g,' ');
+          tokens.push({start:i, end:end+1, name: name||'?'});
+          i = end+1;
+        } else i++;
+      // Control dot ■
+      } else if(ch === '■'){
+        tokens.push({start:i, end:i+1, name:'■'});
+        i++;
+      // CNOT target ⊕
+      } else if(ch === '⊕'){
+        tokens.push({start:i, end:i+1, name:'⊕'});
+        i++;
+      // SWAP × o X entre cables
+      } else if(ch === '×'){
+        tokens.push({start:i, end:i+1, name:'×'});
+        i++;
+      // Medidor M
+      } else if(ch === 'M'){
+        tokens.push({start:i, end:i+1, name:'M'});
+        i++;
       } else {
-        // Gate box con gradiente
-        const gid='g'+Math.random().toString(36).slice(2,8);
-        svg+=`<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="${c}" stop-opacity=".9"/>
-          <stop offset="100%" stop-color="${c}" stop-opacity=".55"/>
-        </linearGradient></defs>`;
-        svg+=`<rect x="${x}" y="${y+ROW/2-GATE_H/2}" width="${GATE_W}" height="${GATE_H}" rx="6"
-          fill="url(#${gid})" stroke="rgba(255,255,255,.25)" stroke-width="1.2"/>`;
+        i++;
+      }
+    }
+    return tokens;
+  }
+
+  const wireToks = padded.map(w => tokenizeWire(w));
+
+  // Alinear columnas: agrupar tokens que comparten posición X aproximada
+  // Usamos el centro de cada token para agrupar
+  const allPositions = [];
+  wireToks.forEach((toks, qi) => {
+    toks.forEach(t => {
+      const mid = (t.start + t.end) / 2;
+      allPositions.push({qi, tok:t, mid});
+    });
+  });
+
+  // Ordenar por posición
+  allPositions.sort((a,b) => a.mid - b.mid);
+
+  // Agrupar en columnas: tokens dentro de ±3 chars de posición van juntos
+  const columns = []; // [{qi→tok}]
+  for(const p of allPositions){
+    let placed = false;
+    for(const col of columns){
+      const colMids = Object.values(col).map(t => (t.start+t.end)/2);
+      const avgMid = colMids.reduce((s,v)=>s+v,0)/colMids.length;
+      if(Math.abs(p.mid - avgMid) < 4){
+        col[p.qi] = p.tok;
+        placed = true;
+        break;
+      }
+    }
+    if(!placed){
+      const newCol = {};
+      newCol[p.qi] = p.tok;
+      columns.push(newCol);
+    }
+  }
+
+  // ── SVG RENDERER — idéntico al Arquitecto Cuántico ────────────
+  const ROW = 56;      // altura por qubit (igual al arquitecto)
+  const GATE_W = 44;   // ancho de caja de puerta
+  const GATE_H = 38;   // altura de caja de puerta
+  const STEP = 60;     // espacio horizontal entre columnas
+  const PAD_L = 60;    // padding izquierdo para etiquetas
+  const PAD_T = 10;    // padding superior
+  const PAD_R = 24;    // padding derecho
+  const PAD_B = 16;    // padding inferior
+
+  const nCols = columns.length;
+  const W = PAD_L + nCols * STEP + PAD_R;
+  const H = PAD_T + nQ * ROW + PAD_B;
+
+  // Colores por puerta — idénticos al arquitecto
+  const COLORS = {
+    H:'#1a5fb4', X:'#c01c28', Y:'#7a3e99', Z:'#1c71d8',
+    S:'#c64600', T:'#26a269', SX:'#c01c28', '√X':'#c01c28',
+    RX:'#0077c2', RY:'#005f6a', RZ:'#5e35b1',
+    CX:'#007070', CZ:'#00695c', SWAP:'#1565c0',
+    CCX:'#005f6a', CSW:'#283593', M:'#6d4c41',
+    '■':'#0088ff', '⊕':'#007070', '×':'#1565c0',
+  };
+  function gateColor(name){
+    const k = name.toUpperCase().replace(/\s*\(.*\)/,'').trim();
+    return COLORS[k] || COLORS[name] || '#2a5a9a';
+  }
+
+  // Unique filter IDs per SVG instance
+  const uid = Math.random().toString(36).slice(2,7);
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"
+    viewBox="0 0 ${W} ${H}"
+    style="background:#020c18;border-radius:8px;display:block;overflow:visible;">
+  <defs>
+    <filter id="glow${uid}">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>`;
+
+  // ── 1. CABLES ─────────────────────────────────────────────────
+  for(let q = 0; q < nQ; q++){
+    const y = PAD_T + q * ROW + ROW/2;
+    const lbl = wireLines[q].match(/^\s*(q_?\d+|q\[\d+\]|qr\[\d+\])/)?.[1] || `q[${q}]`;
+    // Cable horizontal
+    svg += `<line x1="${PAD_L - 8}" y1="${y}" x2="${W - PAD_R + 4}" y2="${y}"
+      stroke="rgba(0,136,255,.22)" stroke-width="1.8"/>`;
+    // Etiqueta qubit
+    svg += `<text x="${PAD_L - 12}" y="${y + 4}" text-anchor="end"
+      font-family="JetBrains Mono,monospace" font-size="11" fill="#bd93f9"
+      font-weight="600">${escH(lbl)}</text>`;
+  }
+
+  // ── 2. PUERTAS POR COLUMNA ────────────────────────────────────
+  columns.forEach((col, ci) => {
+    const xCenter = PAD_L + ci * STEP + STEP/2;
+    const qubitsInCol = Object.keys(col).map(Number).sort((a,b)=>a-b);
+    if(!qubitsInCol.length) return;
+
+    const minQ = qubitsInCol[0];
+    const maxQ = qubitsInCol[qubitsInCol.length - 1];
+
+    // Detectar tipo de puerta compuesta
+    const names = qubitsInCol.map(q => col[q].name);
+    const hasControl  = names.includes('■');
+    const hasTarget   = names.includes('⊕');
+    const hasSWAP     = names.filter(n => n==='×').length >= 2;
+    const hasMeasure  = names.includes('M');
+    const allBoxes    = names.every(n => !['■','⊕','×','M'].includes(n));
+    const isCNOT      = hasControl && hasTarget;
+    const isSWAP      = hasSWAP && !hasControl;
+    const isCCSWAP    = hasSWAP && hasControl;
+
+    // Línea vertical conectora entre qubits involucrados
+    if(qubitsInCol.length > 1){
+      const y1 = PAD_T + minQ * ROW + ROW/2;
+      const y2 = PAD_T + maxQ * ROW + ROW/2;
+      const lineCol = hasControl ? '#0088ff' :
+                      isSWAP    ? '#1565c0' :
+                      names[0] ? gateColor(names[0]) : '#0088ff';
+      svg += `<line x1="${xCenter}" y1="${y1}" x2="${xCenter}" y2="${y2}"
+        stroke="${lineCol}" stroke-width="2.5" stroke-linecap="round"/>`;
+    }
+
+    // Dibujar cada qubit en esta columna
+    qubitsInCol.forEach(q => {
+      const tok = col[q];
+      const name = tok.name;
+      const cy = PAD_T + q * ROW + ROW/2;
+      const gx = xCenter - GATE_W/2;
+      const gy = cy - GATE_H/2;
+      const c = gateColor(name);
+
+      if(name === '■'){
+        // Punto de control — relleno sólido con brillo
+        svg += `<circle cx="${xCenter}" cy="${cy}" r="8"
+          fill="${c}" stroke="rgba(255,255,255,.85)" stroke-width="1.5"
+          filter="url(#glow${uid})"/>`;
+
+      } else if(name === '⊕'){
+        // Target CNOT — círculo con cruz (igual arquitecto)
+        svg += `<circle cx="${xCenter}" cy="${cy}" r="14"
+          fill="none" stroke="${c}" stroke-width="2.5"/>`;
+        svg += `<line x1="${xCenter-14}" y1="${cy}" x2="${xCenter+14}" y2="${cy}"
+          stroke="${c}" stroke-width="2"/>`;
+        svg += `<line x1="${xCenter}" y1="${cy-14}" x2="${xCenter}" y2="${cy+14}"
+          stroke="${c}" stroke-width="2"/>`;
+
+      } else if(name === '×'){
+        // SWAP target — X (igual arquitecto)
+        svg += `<line x1="${xCenter-9}" y1="${cy-9}" x2="${xCenter+9}" y2="${cy+9}"
+          stroke="${c}" stroke-width="2.5" stroke-linecap="round"/>`;
+        svg += `<line x1="${xCenter+9}" y1="${cy-9}" x2="${xCenter-9}" y2="${cy+9}"
+          stroke="${c}" stroke-width="2.5" stroke-linecap="round"/>`;
+
+      } else if(name === 'M'){
+        // Medidor — caja especial con arco de medición
+        svg += `<rect x="${gx}" y="${gy}" width="${GATE_W}" height="${GATE_H}"
+          rx="5" fill="rgba(109,76,65,.3)" stroke="#6d4c41" stroke-width="1.8"/>`;
+        // Icono de medidor: arco + aguja
+        const mx = xCenter, my = cy + 4, mr = 10;
+        svg += `<path d="M ${mx-mr} ${my} A ${mr} ${mr} 0 0 1 ${mx+mr} ${my}"
+          fill="none" stroke="#ff9580" stroke-width="1.8"/>`;
+        svg += `<line x1="${mx}" y1="${my}" x2="${mx+6}" y2="${my-8}"
+          stroke="#ff9580" stroke-width="1.5" stroke-linecap="round"/>`;
+
+      } else {
+        // Caja estándar con gradiente — igual al arquitecto
+        const gid = `g${uid}${ci}${q}`;
+        svg += `<defs>
+          <linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="${c}" stop-opacity=".92"/>
+            <stop offset="100%" stop-color="${c}" stop-opacity=".55"/>
+          </linearGradient>
+        </defs>`;
+        // Sombra/glow de la caja
+        svg += `<rect x="${gx-1}" y="${gy-1}" width="${GATE_W+2}" height="${GATE_H+2}"
+          rx="7" fill="${c}" opacity=".18"/>`;
+        // Caja principal
+        svg += `<rect x="${gx}" y="${gy}" width="${GATE_W}" height="${GATE_H}"
+          rx="6" fill="url(#${gid})" stroke="rgba(255,255,255,.28)" stroke-width="1.4"/>`;
         // Brillo superior
-        svg+=`<rect x="${x+1}" y="${y+ROW/2-GATE_H/2+1}" width="${GATE_W-2}" height="3" rx="5" fill="rgba(255,255,255,.15)"/>`;
-        // Texto de la puerta
-        const lbl=g.name.length>3?g.name.slice(0,3):g.name;
-        const fs=g.name.length>2?10:12;
-        svg+=`<text x="${cx}" y="${cy+fs/3}" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="${fs}" font-weight="bold" fill="#ffffff">${escH(lbl)}</text>`;
+        svg += `<rect x="${gx+2}" y="${gy+2}" width="${GATE_W-4}" height="4"
+          rx="4" fill="rgba(255,255,255,.18)"/>`;
+        // Texto — truncar si es muy largo
+        const display = name.length > 4 ? name.slice(0,4) : name;
+        const fs = display.length <= 2 ? 13 : display.length === 3 ? 11 : 9;
+        svg += `<text x="${xCenter}" y="${cy + fs/3 + 1}"
+          text-anchor="middle"
+          font-family="JetBrains Mono,monospace"
+          font-size="${fs}" font-weight="bold" fill="#ffffff"
+          letter-spacing="-0.5">${escH(display)}</text>`;
       }
     });
   });
 
-  svg+='</svg>';
+  svg += '</svg>';
 
-  return`<div style="padding:.4rem .5rem .5rem;background:#020c18;border-top:1px solid rgba(0,136,255,.1);overflow-x:auto;">
-    <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.1rem 0 .35rem;letter-spacing:.05em;">⚛ CIRCUITO CUÁNTICO</div>
+  return `<div style="padding:.45rem .55rem .55rem;background:#020c18;border-top:1px solid rgba(0,136,255,.1);overflow-x:auto;">
+    <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.1rem 0 .38rem;letter-spacing:.06em;">⚛ CIRCUITO CUÁNTICO</div>
     ${svg}
   </div>`;
 }
