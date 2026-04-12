@@ -704,7 +704,6 @@ function buildCircuitOut(text){
   if(!text.trim()) return '';
 
   const lines = text.split('\n');
-  // Encontrar líneas de qubit wire
   const wireLines = lines.filter(l => /^\s*(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/.test(l));
 
   // Sin wires → ASCII coloreado fallback
@@ -1715,7 +1714,9 @@ function showUI(user){
   const sameUser=alreadyOK&&curUser?.username===user?.username;
   if(sameUser)return;
   _initialized=true;curUser=user;
-  if(role!=='admin'&&role!=='founder'&&!_expositionMode){
+
+  // Permitir acceso a todos si es modo exposición; si no, solo Admin/Founder
+  if(!_expositionMode && role!=='admin' && role!=='founder'){
     document.getElementById('access-denied').classList.add('show');
     ['topbar','secbar','main-area','statusbar'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
     return;
@@ -1729,7 +1730,7 @@ function showUI(user){
   }
   const stored=localStorage.getItem('qcol_colab_url')||'';
   if(stored){engineURL=stored;checkEngine();}
-  if(role==='admin'||role==='founder')refreshNbs();
+  if(!_expositionMode && (role==='admin'||role==='founder'))refreshNbs();
   if(cells.length===0&&!_expositionMode)addCellAt(-1,'qiskit');
 }
 
@@ -1757,16 +1758,38 @@ window.addEventListener('message',e=>{
     const isExpo = isOpenExpo || !!d.expositionMode;
 
     if(!nb){ notify('❌ Notebook sin datos'); return; }
-    // En modo exposición cualquier usuario puede ver
-    if(!isExpo && !requireAuth()) return;
 
-    // Cargar celdas
+    // Forzar modo exposición
+    _expositionMode = isExpo;
+    if(isExpo){
+      document.body.classList.add('expo-mode');
+      document.getElementById('expo-badge').style.display='inline-flex';
+      ['btn-add-code','btn-add-qk','btn-add-md','btn-import',
+       'btn-download','btn-save','btn-publish','stab-2'].forEach(id=>{
+        const el=document.getElementById(id);if(el)el.style.display='none';
+      });
+      const rst=document.getElementById('btn-restore-all');if(rst)rst.style.display='';
+      const ni=document.getElementById('nb-name-inp');if(ni){ni.readOnly=true;ni.style.opacity='.6';}
+    } else {
+      document.body.classList.remove('expo-mode');
+      document.getElementById('expo-badge').style.display='none';
+      ['btn-add-code','btn-add-qk','btn-add-md','btn-import',
+       'btn-download','btn-save','btn-publish','stab-2'].forEach(id=>{
+        const el=document.getElementById(id);if(el)el.style.display='';
+      });
+      const rst=document.getElementById('btn-restore-all');if(rst)rst.style.display='none';
+      const ni=document.getElementById('nb-name-inp');if(ni){ni.readOnly=false;ni.style.opacity='';}
+    }
+
     document.getElementById('nb-name-inp').value = nb.title||nb.name||'Sin título';
     cells = (nb.cells && nb.cells.length > 0)
       ? nb.cells.map(c=>({...c, id:genId(), output:'', exec_count:null, mdEdit:false, errorLine:null}))
       : [];
 
-    // Mostrar UI para invitados en modo expo
+    // Guardar copia original para restaurar
+    if(isExpo) _originalCells = JSON.parse(JSON.stringify(cells));
+
+    // Mostrar UI incluso para Guest en modo exposición
     if(isExpo){
       _initialized = true;
       curUser = curUser || {name:'Invitado', role:'guest'};
@@ -1777,43 +1800,9 @@ window.addEventListener('message',e=>{
     }
 
     setView('notebook');
-
-    // Orden importante: primero establecer _expositionMode, luego renderCells
-    // para que buildCellEl genere el HTML correcto desde el primer render
-    if(isExpo){
-      // Seteamos el flag ANTES de renderizar
-      _expositionMode = true;
-      _originalCells  = JSON.parse(JSON.stringify(cells));
-      document.body.classList.add('expo-mode');
-      // Botones
-      document.getElementById('expo-badge').style.display='inline-flex';
-      ['btn-add-code','btn-add-qk','btn-add-md','btn-import',
-       'btn-download','btn-save','btn-publish','stab-2'].forEach(id=>{
-        const el=document.getElementById(id); if(el) el.style.display='none';
-      });
-      const rst=document.getElementById('btn-restore-all'); if(rst) rst.style.display='';
-      const ni=document.getElementById('nb-name-inp');
-      if(ni){ ni.readOnly=true; ni.style.opacity='.6'; }
-      // Ahora renderizamos — buildCellEl verá _expositionMode=true
-      renderCells();
-      if(cells[0]) focusCell(cells[0].id);
-      notify('👁 Modo exposición — lee el material y experimenta con el código');
-    } else {
-      // Modo normal
-      _expositionMode = false;
-      document.body.classList.remove('expo-mode');
-      document.getElementById('expo-badge').style.display='none';
-      ['btn-add-code','btn-add-qk','btn-add-md','btn-import',
-       'btn-download','btn-save','btn-publish','stab-2'].forEach(id=>{
-        const el=document.getElementById(id); if(el) el.style.display='';
-      });
-      const rst=document.getElementById('btn-restore-all'); if(rst) rst.style.display='none';
-      const ni=document.getElementById('nb-name-inp');
-      if(ni){ ni.readOnly=false; ni.style.opacity=''; }
-      renderCells();
-      if(cells[0]) focusCell(cells[0].id);
-      notify('📂 Cargado: '+(nb.title||nb.name||'Notebook'));
-    }
+    renderCells();
+    if(cells[0]) focusCell(cells[0].id);
+    notify(isExpo ? '👁 Modo exposición — solo lectura' : '📂 Cargado: '+(nb.title||nb.name||'Notebook'));
   }
 });
 
@@ -1831,7 +1820,7 @@ setTimeout(()=>{if(!_initialized){try{const s=localStorage.getItem('qcol_cur_use
 setTimeout(()=>{if(!_initialized){document.getElementById('access-denied').classList.add('show');document.getElementById('topbar').style.display='flex';_initialized=true;}},3000);
 window.addEventListener('message',e=>{const d=e.data||{};if(d.type==='QCOL_USER_UPDATE'){const role=d.user?.role||'guest';if(role==='admin'||role==='founder'){_initialized=false;showUI(d.user);}}});
 
-function requireAuth(){const role=curUser?.role||'guest';if(role!=='admin'&&role!=='founder'&&!_expositionMode){notify('❌ Requiere cuenta Admin o Founder');postCore('QCOL_LOGIN');return false;}return true;}
+function requireAuth(){const role=curUser?.role||'guest';if(!_expositionMode&&role!=='admin'&&role!=='founder'){notify('❌ Requiere cuenta Admin o Founder');postCore('QCOL_LOGIN');return false;}return true;}
 
 // Init
 function initEngine(){const s=localStorage.getItem('qcol_colab_url');if(s){engineURL=s;checkEngine();}}
