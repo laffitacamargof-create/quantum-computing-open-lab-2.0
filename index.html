@@ -399,7 +399,7 @@ body::before{content:'';position:fixed;inset:0;
   <div class="screen active" id="screen-home">
     <div class="menu-hero">
       <h1>⚛ QUANTUM COMPUTING OPEN LAB</h1>
-      <p>El ecosistema donde estudiantes aprenden, simulan y publican sus primeros proyectos de computación cuántica.</p>
+      <p>No es solo un ecosistema: es un tablero donde cada pieza 🧩 encaja aportando una función y propuesta diferente, permitiendo que estudiantes e investigadores estudien, compartan y simulen sus circuitos cuánticos.</p>
     </div>
     <div id="logout-bar" style="display:none;position:absolute;top:.6rem;right:.7rem;z-index:20;">
       <button onclick="QCOL.doLogout()" style="
@@ -603,6 +603,33 @@ body::before{content:'';position:fixed;inset:0;
     </div>
   </div>
 
+  <!-- NUEVO MÓDULO: MODULE LAB -->
+  <div class="screen" id="screen-module-lab">
+    <div class="screen-hdr">
+      <button class="btn-back" onclick="QCOL.nav('home')">← MENÚ</button>
+      <div class="screen-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M14.5 5.5L18.5 9.5M6.5 18.5L5.5 17.5M16.5 8.5L15.5 7.5" stroke="#ffd700" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M8 2L16 8L20 20L4 20L8 2Z" stroke="#ffd700" stroke-width="1.8" fill="rgba(255,215,0,.05)"/>
+          <circle cx="12" cy="15" r="2" stroke="#ffd700" stroke-width="1.5"/>
+          <path d="M4 20L12 15L20 20" stroke="#ffd700" stroke-width="1.5"/>
+        </svg>
+        🛠️ MODULE LAB
+      </div>
+      <button class="hbtn ai-btn" onclick="QCOL.toggleAI()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="vertical-align:middle;margin-right:3px;">
+          <circle cx="12" cy="12" r="10" stroke="#00ffdd" stroke-width="1.4"/>
+          <path d="M8 12h8M12 8l4 4-4 4" stroke="#00ffdd" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="12" cy="12" r="2.5" fill="rgba(0,255,221,.2)" stroke="#00ffdd" stroke-width="1"/>
+        </svg>
+        QuantumChat
+      </button>
+    </div>
+    <div class="module-iframe-wrap" id="module-lab-wrap">
+      <div id="module-lab-ph"></div>
+    </div>
+  </div>
+
 </div>
 
 <script type="module">
@@ -623,6 +650,7 @@ body::before{content:'';position:fixed;inset:0;
     account:        'qcol-account.html',
     founder:        'qcol-founder.html',
     help:           'qcol-help.html',
+    'module-lab':   'qcol-module-lab.html',   // Nuevo módulo
   };
 
   let curUser = null;
@@ -883,11 +911,12 @@ body::before{content:'';position:fixed;inset:0;
     const info = {
       projects:       { icon:'📂', title:'PROYECTOS',              desc:'Explora y ejecuta los notebooks del laboratorio.' },
       architect:      { icon:'⚙️', title:'QUANTUM OPEN LAB',    desc:'Editor visual de circuitos cuánticos con ejecución real en Python (Qiskit).' },
-      'architect-pro':{ icon:'📓', title:'QUANTUM NOTEBOOK',       desc:'Crea y edita Notebooks cuánticos completos. Exporta a .ipynb. Acceso Admin+.' },
+      'architect-pro':{ icon:'📓', title:'QUANTUM NOTEBOOK',       desc:'Crea y edita Notebooks cuánticos completos. Exporta a .ipynb. Solo fundadores y administradores pueden publicar en Proyectos.' },
       library:        { icon:'📚', title:'LIBRERÍA Y TUTORIALES',  desc:'Videos, PDFs y notebooks educativos.' },
       account:        { icon:'👤', title:'MI CUENTA',              desc:'Tu perfil y circuitos guardados.' },
       founder:        { icon:'👑', title:'PANEL FUNDADOR',         desc:'Configuración y gestión del ecosistema.' },
       help:           { icon:'❓', title:'AYUDA',                  desc:'Guía de uso del ecosistema.' },
+      'module-lab':   { icon:'🔨🔧', title:'MODULE LAB',          desc:'Donde se decide cómo y qué piezas pueden formar parte para darle más valor al tablero. Proporciona herramientas para crear nuevos módulos con nuevas capacidades a los investigadores.' },
     };
     const i = info[screen] || { icon:'📦', title:'MÓDULO', desc:'' };
     return `<div class="module-placeholder">
@@ -947,9 +976,9 @@ body::before{content:'';position:fixed;inset:0;
             <path d="M6 0v2M6 10v2M0 6h2M10 6h2M1.8 1.8l1.4 1.4M8.8 8.8l1.4 1.4M1.8 10.2l1.4-1.4M8.8 3.2l1.4-1.4" stroke="#bd93f9" stroke-width="1.3" stroke-linecap="round"/>
           </g></svg>`,
         title:'📓 QUANTUM NOTEBOOK', badge:'badge-pro', badgeTxt:'ADMIN+',
-        desc:'Crea y edita Notebooks cuánticos completos. Exporta a .ipynb. Solo para administradores y Fundador.',
+        desc:'Crea y edita Notebooks cuánticos completos. Exporta a .ipynb. Solo fundadores y administradores pueden publicar en Proyectos.',
         delay:.15,
-        show: isAdm,
+        show: true,   // Ahora visible para todos, pero el texto aclara el permiso de publicación
         locked: false,
       },
       {
@@ -996,7 +1025,7 @@ body::before{content:'';position:fixed;inset:0;
         title:'CONFIGURACIÓN', badge:'badge-admin', badgeTxt:'SISTEMA',
         desc:'Panel de control del ecosistema QCOL. Usuarios, compilador, IA y GitHub.',
         delay:.3,
-        show: isF,   // ⬅️ solo visible cuando Fundador está activo
+        show: isF,
       },
       {
         screen:'help',
@@ -1007,6 +1036,19 @@ body::before{content:'';position:fixed;inset:0;
         title:'AYUDA', badge:'', badgeTxt:'',
         desc:'Documentación completa, guías de inicio rápido y preguntas frecuentes sobre el ecosistema QCOL.',
         delay:.35, show:true,
+      },
+      // NUEVA TARJETA: MODULE LAB
+      {
+        screen:'module-lab',
+        icon:`<svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+          <path d="M14.5 5.5L18.5 9.5M6.5 18.5L5.5 17.5M16.5 8.5L15.5 7.5" stroke="#ffd700" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M8 2L16 8L20 20L4 20L8 2Z" stroke="#ffd700" stroke-width="1.8" fill="rgba(255,215,0,.05)"/>
+          <circle cx="12" cy="15" r="2" stroke="#ffd700" stroke-width="1.5"/>
+          <path d="M4 20L12 15L20 20" stroke="#ffd700" stroke-width="1.5"/>
+        </svg>`,
+        title:'🛠️ MODULE LAB', badge:'badge-new', badgeTxt:'HERRAMIENTAS',
+        desc:'Donde se decide cómo y qué piezas pueden formar parte para darle más valor al tablero. Proporciona herramientas para crear nuevos módulos con nuevas capacidades a los investigadores.',
+        delay:.4, show:true,
       },
     ];
 
