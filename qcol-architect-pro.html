@@ -703,27 +703,21 @@ function buildTextOut(text){
 function buildCircuitOut(text){
   if(!text.trim()) return '';
 
-  // ─────────────────────────────────────────────────────────────────
-  // PASO 1: Parsear texto ASCII → estructura de gates igual al arquitecto
-  // El arquitecto usa: { id, q, q2?, q3?, def:{bg,glow,sym}, col }
-  // ─────────────────────────────────────────────────────────────────
-  const lines = text.split('\n');
+  const allLines = text.split('\n');
 
-  // Encontrar líneas de qubit: "q_0: ─H─..." o "q[0]: ─H─..."
-  const wireLines = [];
-  const wireIdx   = []; // índice original en lines[]
-  lines.forEach((l,i)=>{
-    if(/^\s*(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/.test(l)){
-      wireLines.push(l);
-      wireIdx.push(i);
-    }
-  });
+  // ── Detectar líneas de qubit ──────────────────────────────────
+  // Qiskit genera: "q_0: ─H─" o "q[0]: ─H─"
+  const wireLines = allLines.filter(l =>
+    /^\s*(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/.test(l)
+  );
 
   if(wireLines.length === 0){
-    // Fallback ASCII coloreado
+    // Fallback: ASCII coloreado
     let col = escH(text);
-    col = col.replace(/(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/g,'<s style="color:#bd93f9;font-weight:700;font-style:normal">$1</s>:');
-    col = col.replace(/┤\s*([A-Za-z0-9√Rπ/.+\-]+)\s*[├┤]/g,(m,g)=>`┤<s style="color:#00aaff;font-weight:700;font-style:normal"> ${g} </s>┤`);
+    col = col.replace(/(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/g,
+      '<s style="color:#bd93f9;font-weight:700;font-style:normal">$1</s>:');
+    col = col.replace(/┤\s*([A-Za-z0-9√Rπ/.+\-]+)\s*[├┤]/g,
+      (m,g)=>`┤<s style="color:#00aaff;font-weight:700;font-style:normal"> ${g} </s>┤`);
     col = col.replace(/─(M)─/g,'─<s style="color:#ff9580;font-weight:700;font-style:normal">M</s>─');
     return `<div style="padding:.4rem .55rem;background:#020c18;border-top:1px solid rgba(0,136,255,.1);">
       <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.1rem 0 .3rem;">⚛ DIAGRAMA DEL CIRCUITO</div>
@@ -733,369 +727,438 @@ function buildCircuitOut(text){
 
   const nQ = wireLines.length;
 
-  // Extraer label y contenido de cada wire
-  const wireLabels   = wireLines.map(l=>(l.match(/^\s*(q_?\d+|q\[\d+\]|qr\[\d+\])/)||['','q'])[1]);
+  // Labels y contenidos
+  const wireLabels   = wireLines.map(l=>
+    (l.match(/^\s*(q_?\d+|q\[\d+\]|qr\[\d+\])/)||['','?'])[1]
+  );
   const wireContents = wireLines.map(l=>{
     const m = l.match(/^\s*(?:q_?\d+|q\[\d+\]|qr\[\d+\])\s*:\s*(.*)/);
     return m ? m[1] : '';
   });
 
-  // ─────────────────────────────────────────────────────────────────
-  // PASO 2: Tokenizar cada wire → lista de tokens con posición de carácter
-  // Tipos: box (┤NAME├), ctrl (■), tgt (⊕), swap (×), meas (M)
-  // ─────────────────────────────────────────────────────────────────
+  // ── TOKENIZAR ────────────────────────────────────────────────
+  // Qiskit text mode format:
+  //   Caja:     ┤ NAME ├  o  ┤ NAME ┤
+  //   Control:  ■  (Unicode U+25A0 relleno) o  █
+  //   Target:   ⊕  (viejo formato) o  ┤ X ├  (formato moderno = target del CNOT)
+  //   Medición: ┤M├  o  ─M─  o  ┤ Meas ├
+  //   SWAP:     ┤ X ├ en DOS qubits distintos a la misma posición X
+
   function tokenize(wire){
     const toks = [];
-    // Regex unificada — orden importa
-    const RE = /┤([^┤├╪]*?)(?:├|┤)|(■)|(⊕)|(×)|((?<!\w)M(?=─|╫|╨|\s|$))/g;
+    // Regex: captura cajas ┤...┤├, control ■, target clásico ⊕, swap/target ×, meas M aislado
+    const RE = /┤\s*([^┤├\n]*?)\s*(?:├|┤)|(■|█)|(⊕)|(×)/g;
     let m;
     while((m = RE.exec(wire)) !== null){
+      const mid = m.index + Math.floor(m[0].length / 2);
       if(m[1] !== undefined){
-        toks.push({type:'box', name:m[1].trim()||'?', start:m.index, end:m.index+m[0].length});
+        const name = m[1].trim() || '?';
+        toks.push({type:'box', name, mid, start:m.index, end:m.index+m[0].length});
       } else if(m[2]){
-        toks.push({type:'ctrl', name:'■', start:m.index, end:m.index+1});
+        toks.push({type:'ctrl', name:'■', mid:m.index, start:m.index, end:m.index+1});
       } else if(m[3]){
-        toks.push({type:'tgt',  name:'⊕', start:m.index, end:m.index+1});
+        toks.push({type:'tgt',  name:'⊕', mid:m.index, start:m.index, end:m.index+1});
       } else if(m[4]){
-        toks.push({type:'swap', name:'×', start:m.index, end:m.index+1});
-      } else if(m[5]){
-        toks.push({type:'meas', name:'M',  start:m.index, end:m.index+1});
+        toks.push({type:'swap', name:'×', mid:m.index, start:m.index, end:m.index+1});
       }
     }
+    // También detectar M medidor aislado (─M─ sin caja)
+    const MEAS = /(?:─|^)(M)(?:─|$)/g;
+    while((m = MEAS.exec(wire)) !== null){
+      const pos = wire.indexOf('M', m.index);
+      // Solo si no ya hay un token box en esa posición
+      if(!toks.some(t => Math.abs(t.mid - pos) < 3)){
+        toks.push({type:'meas', name:'M', mid:pos, start:pos, end:pos+1});
+      }
+    }
+    toks.sort((a,b) => a.mid - b.mid);
     return toks;
   }
 
   const wireToks = wireContents.map(w => tokenize(w));
 
-  // ─────────────────────────────────────────────────────────────────
-  // PASO 3: Agrupar tokens en columnas por posición de carácter
-  // Tokens en posiciones solapadas → misma columna
-  // ─────────────────────────────────────────────────────────────────
-  // Collect all tokens with qubit index
-  const allToks = [];
-  wireToks.forEach((toks,qi)=>{ toks.forEach(t=>allToks.push({...t,qi})); });
-  // Sort by start position
-  allToks.sort((a,b)=>a.start-b.start || a.qi-b.qi);
+  // ── AGRUPAR EN COLUMNAS ──────────────────────────────────────
+  // Tolerancia: tokens con mid dentro de ±6 chars → misma columna
+  const TOLS = 6;
+  const columns = []; // cada col = [{qi, tok}]
 
-  // Group into columns: tokens overlap if their char ranges intersect ±2
-  const rawCols = []; // each col: [{qi, tok}]
-  for(const item of allToks){
-    let placed = false;
-    for(const col of rawCols){
-      // Check if this token's position overlaps with any token in col
-      const colItems = col;
-      const overlap = colItems.some(ci=>{
-        const ciMid = (ci.tok.start+ci.tok.end)/2;
-        const itMid = (item.start+item.end)/2;
-        return Math.abs(ciMid - itMid) <= 5;
-      });
-      if(overlap){
-        // Only add if this qubit not already in col
-        if(!colItems.find(ci=>ci.qi===item.qi)){
-          colItems.push({qi:item.qi, tok:item});
-          placed = true;
+  wireToks.forEach((toks, qi) => {
+    toks.forEach(tok => {
+      let placed = false;
+      for(const col of columns){
+        const avgMid = col.reduce((s,c)=>s+c.tok.mid,0)/col.length;
+        if(Math.abs(tok.mid - avgMid) <= TOLS){
+          if(!col.find(c=>c.qi===qi)){
+            col.push({qi, tok});
+            placed = true;
+          }
+          break;
         }
-        break;
       }
-    }
-    if(!placed) rawCols.push([{qi:item.qi, tok:item}]);
-  }
+      if(!placed) columns.push([{qi, tok}]);
+    });
+  });
 
-  // ─────────────────────────────────────────────────────────────────
-  // PASO 4: Convertir columnas a gates (como circuit.gates del arquitecto)
-  // gate = { id, sym, bg, glow, q, q2?, q3?, col }
-  // ─────────────────────────────────────────────────────────────────
+  // Ordenar columnas por posición media
+  columns.sort((a,b) => {
+    const ma = a.reduce((s,c)=>s+c.tok.mid,0)/a.length;
+    const mb = b.reduce((s,c)=>s+c.tok.mid,0)/b.length;
+    return ma - mb;
+  });
+
+  // ── IDENTIFICAR TIPO DE PUERTA POR COLUMNA ───────────────────
+  // Aquí está la CLAVE del problema:
+  // Qiskit moderno escribe el target del CNOT como "┤ X ├" (box con nombre "X")
+  // NO como ⊕. Por lo tanto:
+  //   ctrl ■  +  box "X"   → CX (CNOT)
+  //   ctrl ■  +  ctrl ■    → CZ
+  //   box "X" +  box "X"   → SWAP (dos X en misma posición = SWAP)
+  //   box "Z" (en ctrl+box) → CZ genérico
+  //   ⊕ (formato antiguo)  → target del CX
+
   const COLORS = {
     H:'#1a5fb4', X:'#c01c28', Y:'#7a3e99', Z:'#1c71d8',
     S:'#c64600', T:'#26a269', SX:'#c01c28', '√X':'#c01c28',
     RX:'#0077c2', RY:'#005f6a', RZ:'#5e35b1', P:'#5e35b1',
+    U:'#6a1b9a', U1:'#6a1b9a', U2:'#6a1b9a', U3:'#6a1b9a',
     CX:'#007070', CZ:'#00695c', SWAP:'#1565c0',
-    CCX:'#005f6a', CSW:'#283593', M:'#6d4c41',
+    CCX:'#005f6a', CSW:'#283593', M:'#6d4c41', MEAS:'#6d4c41',
     DEFAULT:'#1a4a8a'
   };
-  function gColor(name){
+  function gc(name){
     const k = name.replace(/\s*\(.*\)/,'').trim().toUpperCase();
-    return COLORS[k] || COLORS[name] || COLORS.DEFAULT;
+    return COLORS[k] || COLORS.DEFAULT;
   }
 
   const gates = [];
-  rawCols.forEach((colItems, ci)=>{
-    const sorted = colItems.slice().sort((a,b)=>a.qi-b.qi);
-    const nItems = sorted.length;
 
-    if(nItems === 1){
-      // Puerta de 1 qubit
+  columns.forEach((col, ci) => {
+    const sorted = col.slice().sort((a,b) => a.qi - b.qi);
+
+    if(sorted.length === 1){
+      // ── PUERTA 1 QUBIT ────────────────────────────────────────
       const {qi, tok} = sorted[0];
       const name = tok.name;
-      const sym  = name.length > 3 ? name.slice(0,3) : name;
-      const id   = name.toUpperCase().replace(/\s*\(.*\)/,'').replace(/[^A-Z0-9√]/g,'');
-      gates.push({id, sym, bg:gColor(name), glow:gColor(name),
-        q:qi, col:ci, type:'1q', name});
+      const isMeas = tok.type==='meas' || name.toUpperCase()==='M' || name.toUpperCase()==='MEAS';
+      const id = isMeas ? 'M' : name.toUpperCase().replace(/\s*\(.*\)/,'').replace(/[^A-Z0-9√]/g,'');
+      gates.push({
+        id, sym: name.length>4 ? name.slice(0,3) : name,
+        bg: gc(name), glow: gc(name),
+        q: qi, col: ci, type: '1q', name
+      });
+      return;
+    }
 
-    } else {
-      // Puerta multi-qubit — identificar tipo
-      const types  = sorted.map(s=>s.tok.type);
-      const names  = sorted.map(s=>s.tok.name);
-      const qubits = sorted.map(s=>s.qi);
+    // ── MULTI-QUBIT ───────────────────────────────────────────
+    const ctrlItems = sorted.filter(s => s.tok.type === 'ctrl');
+    const tgtItems  = sorted.filter(s => s.tok.type === 'tgt');   // ⊕ clásico
+    const swapItems = sorted.filter(s => s.tok.type === 'swap');  // × clásico
+    const boxItems  = sorted.filter(s => s.tok.type === 'box');
+    const measItems = sorted.filter(s => s.tok.type === 'meas');
 
-      const ctrlIdxs = sorted.filter(s=>s.tok.type==='ctrl').map(s=>s.qi);
-      const tgtIdxs  = sorted.filter(s=>s.tok.type==='tgt') .map(s=>s.qi);
-      const swapIdxs = sorted.filter(s=>s.tok.type==='swap').map(s=>s.qi);
-      const measIdxs = sorted.filter(s=>s.tok.type==='meas').map(s=>s.qi);
-      const boxIdxs  = sorted.filter(s=>s.tok.type==='box' ).map(s=>s.qi);
+    const ctrlQs = ctrlItems.map(s=>s.qi);
+    const tgtQs  = tgtItems.map(s=>s.qi);
+    const swapQs = swapItems.map(s=>s.qi);
+    const boxQs  = boxItems.map(s=>s.qi);
+    const boxNames= boxItems.map(s=>s.tok.name);
 
-      if(ctrlIdxs.length > 0 && tgtIdxs.length > 0){
-        // CX (CNOT): control ■ + target ⊕
-        // IMPORTANTE: preservar quién es control y quién es target, sin importar índice
-        if(ctrlIdxs.length === 2 && tgtIdxs.length === 1){
-          // Toffoli CCX: los 2 controles + 1 target, ordenados por posición
-          const qs = [...ctrlIdxs,...tgtIdxs].sort((a,b)=>a-b);
-          gates.push({id:'CCX', sym:'CCX', bg:'#005f6a', glow:'#005f6a',
-            q:qs[0], q2:qs[1], q3:qs[2],
-            ctrlQ1:ctrlIdxs[0], ctrlQ2:ctrlIdxs[1], tgtQ:tgtIdxs[0],
-            col:ci, type:'3q'});
-        } else {
-          // CX normal — guardar control y target REALES (no min/max)
-          const ctrlQ = ctrlIdxs[0];
-          const tgtQ  = tgtIdxs[0];
-          gates.push({id:'CX', sym:'CX', bg:'#007070', glow:'#007070',
-            q:Math.min(ctrlQ,tgtQ), q2:Math.max(ctrlQ,tgtQ),
-            ctrlQ, tgtQ,   // ← posiciones reales del control y target
-            col:ci, type:'2q'});
-        }
-      } else if(ctrlIdxs.length > 0 && swapIdxs.length >= 2){
-        // CSWAP (Fredkin)
-        const qs = [...ctrlIdxs,...swapIdxs].sort((a,b)=>a-b);
-        gates.push({id:'CSW', sym:'CSW', bg:'#283593', glow:'#283593',
-          q:qs[0], q2:qs[1], q3:qs[2], col:ci, type:'3q'});
-      } else if(swapIdxs.length >= 2){
-        // SWAP
-        gates.push({id:'SWAP', sym:'SW', bg:'#1565c0', glow:'#1565c0',
-          q:swapIdxs[0], q2:swapIdxs[swapIdxs.length-1], col:ci, type:'2q'});
-      } else if(ctrlIdxs.length > 0 && boxIdxs.length > 0){
-        // Puerta controlada genérica (CZ, CH, CY, etc.)
-        const ctrlQ   = ctrlIdxs[0];
-        const tgtQ    = boxIdxs[0];
-        const boxName = sorted.find(s=>s.tok.type==='box')?.tok.name || 'Z';
-        const isCZ    = boxName.toUpperCase() === 'Z';
-        gates.push({id: isCZ?'CZ':'CX', sym:boxName, bg:gColor(boxName), glow:gColor(boxName),
-          q:Math.min(ctrlQ,tgtQ), q2:Math.max(ctrlQ,tgtQ),
-          ctrlQ, tgtQ,   // ← posiciones reales
-          col:ci, type:'2q',
-          isCZ: isCZ || boxName.toUpperCase() !== 'X'
-        });
-      } else if(measIdxs.length > 1 || (measIdxs.length > 0 && nItems > 1)){
-        // Múltiples medidores — dibujar individualmente
-        measIdxs.forEach(qi=>{
+    // Contar cuántos boxes se llaman "X" → esos son targets de CNOT o SWAP
+    const xBoxQs  = boxItems.filter(s=>s.tok.name.toUpperCase()==='X').map(s=>s.qi);
+    const nonXBoxQs = boxItems.filter(s=>s.tok.name.toUpperCase()!=='X').map(s=>s.qi);
+
+    // ── Múltiples medidores → 1q cada uno ────────────────────
+    if(measItems.length > 0 && ctrlItems.length === 0){
+      [...measItems, ...boxItems.filter(s=>s.tok.name.toUpperCase()==='M'||s.tok.name.toUpperCase()==='MEAS')]
+        .forEach(s=>{
           gates.push({id:'M', sym:'M', bg:'#6d4c41', glow:'#6d4c41',
-            q:qi, col:ci, type:'1q'});
+            q:s.qi, col:ci, type:'1q'});
         });
-        // También las cajas si las hay
-        boxIdxs.forEach(qi=>{
-          const name = sorted.find(s=>s.qi===qi)?.tok.name||'?';
-          gates.push({id:name.toUpperCase(), sym:name, bg:gColor(name), glow:gColor(name),
-            q:qi, col:ci, type:'1q'});
-        });
-      } else {
-        // Varios boxes — dibujar individualmente
-        sorted.forEach(s=>{
-          const name = s.tok.name;
-          gates.push({id:name.toUpperCase().replace(/\s*\(.*\)/,''),
-            sym:name.length>3?name.slice(0,3):name, bg:gColor(name), glow:gColor(name),
+      boxItems.filter(s=>s.tok.name.toUpperCase()!=='M'&&s.tok.name.toUpperCase()!=='MEAS')
+        .forEach(s=>{
+          const name=s.tok.name;
+          gates.push({id:name.toUpperCase(), sym:name, bg:gc(name), glow:gc(name),
             q:s.qi, col:ci, type:'1q', name});
         });
+      return;
+    }
+
+    // ── CASO 1: ctrl ■ + ⊕ clásico ───────────────────────────
+    // (Qiskit antiguo o gates custom)
+    if(ctrlQs.length > 0 && tgtQs.length > 0){
+      if(ctrlQs.length === 2 && tgtQs.length === 1){
+        // Toffoli CCX
+        const qs = [...ctrlQs,...tgtQs].sort((a,b)=>a-b);
+        gates.push({id:'CCX', sym:'CCX', bg:'#005f6a', glow:'#005f6a',
+          q:qs[0], q2:qs[1], q3:qs[2],
+          ctrlQ1:ctrlQs[0], ctrlQ2:ctrlQs[1], tgtQ:tgtQs[0],
+          col:ci, type:'3q'});
+      } else {
+        const ctrlQ=ctrlQs[0], tgtQ=tgtQs[0];
+        gates.push({id:'CX', sym:'CX', bg:'#007070', glow:'#007070',
+          q:Math.min(ctrlQ,tgtQ), q2:Math.max(ctrlQ,tgtQ),
+          ctrlQ, tgtQ, col:ci, type:'2q'});
+      }
+      return;
+    }
+
+    // ── CASO 2: × clásico → SWAP o CSWAP ─────────────────────
+    if(swapQs.length >= 2){
+      if(ctrlQs.length > 0){
+        const qs=[...ctrlQs,...swapQs].sort((a,b)=>a-b);
+        gates.push({id:'CSW', sym:'CSW', bg:'#283593', glow:'#283593',
+          q:qs[0], q2:qs[1], q3:qs[2],
+          ctrlQ1:ctrlQs[0], col:ci, type:'3q'});
+      } else {
+        gates.push({id:'SWAP', sym:'SW', bg:'#1565c0', glow:'#1565c0',
+          q:swapQs[0], q2:swapQs[swapQs.length-1],
+          ctrlQ:swapQs[0], tgtQ:swapQs[swapQs.length-1],
+          col:ci, type:'2q'});
+      }
+      return;
+    }
+
+    // ── CASO 3: ctrl ■ + box(es) ─────────────────────────────
+    // Qiskit MODERNO usa ┤ X ├ para target del CNOT
+    // Regla:
+    //   ■ + box("X")          → CX  (ctrl=■ qubit, tgt=X qubit)
+    //   ■ + ■ (dos ctrls)     → CZ
+    //   ■ + box("Z")          → CZ
+    //   ■ + box(otro)         → puerta controlada genérica
+    //   box("X") + box("X")   → SWAP (misma puerta, dos targets)
+    if(ctrlQs.length > 0 && boxQs.length > 0){
+      // ¿Dos controles + un X? → Toffoli
+      if(ctrlQs.length === 2 && xBoxQs.length === 1){
+        const qs=[...ctrlQs,...xBoxQs].sort((a,b)=>a-b);
+        gates.push({id:'CCX', sym:'CCX', bg:'#005f6a', glow:'#005f6a',
+          q:qs[0], q2:qs[1], q3:qs[2],
+          ctrlQ1:ctrlQs[0], ctrlQ2:ctrlQs[1], tgtQ:xBoxQs[0],
+          col:ci, type:'3q'});
+        return;
+      }
+      // ¿Un control + un X? → CNOT (formato moderno)
+      if(ctrlQs.length === 1 && xBoxQs.length === 1){
+        const ctrlQ=ctrlQs[0], tgtQ=xBoxQs[0];
+        gates.push({id:'CX', sym:'CX', bg:'#007070', glow:'#007070',
+          q:Math.min(ctrlQ,tgtQ), q2:Math.max(ctrlQ,tgtQ),
+          ctrlQ, tgtQ, col:ci, type:'2q'});
+        return;
+      }
+      // ¿Un control + Z? → CZ
+      const zBoxQs = boxItems.filter(s=>s.tok.name.toUpperCase()==='Z').map(s=>s.qi);
+      if(ctrlQs.length === 1 && zBoxQs.length === 1){
+        const ctrlQ=ctrlQs[0], tgtQ=zBoxQs[0];
+        gates.push({id:'CZ', sym:'CZ', bg:'#00695c', glow:'#00695c',
+          q:Math.min(ctrlQ,tgtQ), q2:Math.max(ctrlQ,tgtQ),
+          ctrlQ, tgtQ, col:ci, type:'2q'});
+        return;
+      }
+      // Genérica controlada con non-X box
+      if(ctrlQs.length === 1 && nonXBoxQs.length >= 1){
+        const ctrlQ=ctrlQs[0];
+        const tgtQ=nonXBoxQs[0];
+        const boxName=sorted.find(s=>s.qi===tgtQ)?.tok.name||'?';
+        const isZ=boxName.toUpperCase()==='Z';
+        gates.push({
+          id:isZ?'CZ':'CG', sym:boxName,
+          bg:isZ?'#00695c':gc(boxName), glow:isZ?'#00695c':gc(boxName),
+          q:Math.min(ctrlQ,tgtQ), q2:Math.max(ctrlQ,tgtQ),
+          ctrlQ, tgtQ, col:ci, type:'2q', isCZ:isZ
+        });
+        return;
       }
     }
+
+    // ── CASO 4: dos controles ■ ■ (sin target explícito) → CZ ─
+    if(ctrlQs.length === 2 && tgtQs.length === 0 && boxQs.length === 0){
+      const ctrlQ=ctrlQs[0], tgtQ=ctrlQs[1];
+      gates.push({id:'CZ', sym:'CZ', bg:'#00695c', glow:'#00695c',
+        q:Math.min(ctrlQ,tgtQ), q2:Math.max(ctrlQ,tgtQ),
+        ctrlQ, tgtQ, col:ci, type:'2q'});
+      return;
+    }
+
+    // ── CASO 5: dos X boxes a la misma posición → SWAP ────────
+    if(xBoxQs.length >= 2 && ctrlQs.length === 0){
+      gates.push({id:'SWAP', sym:'SW', bg:'#1565c0', glow:'#1565c0',
+        q:xBoxQs[0], q2:xBoxQs[xBoxQs.length-1],
+        ctrlQ:xBoxQs[0], tgtQ:xBoxQs[xBoxQs.length-1],
+        col:ci, type:'2q'});
+      return;
+    }
+
+    // ── CASO 6: todo lo demás → puertas individuales ──────────
+    sorted.forEach(s=>{
+      const name = s.tok.name;
+      const isMeas = s.tok.type==='meas'||name.toUpperCase()==='M'||name.toUpperCase()==='MEAS';
+      if(isMeas){
+        gates.push({id:'M', sym:'M', bg:'#6d4c41', glow:'#6d4c41',
+          q:s.qi, col:ci, type:'1q'});
+      } else {
+        const id = name.toUpperCase().replace(/\s*\(.*\)/,'').replace(/[^A-Z0-9√]/g,'');
+        gates.push({id, sym:name.length>4?name.slice(0,3):name, bg:gc(name), glow:gc(name),
+          q:s.qi, col:ci, type:'1q', name});
+      }
+    });
   });
 
-  // ─────────────────────────────────────────────────────────────────
-  // PASO 5: Calcular profundidad (depth) por qubit — IDÉNTICO al arquitecto
-  // Esto elimina el solapamiento: cada gate ocupa exactamente la columna mínima libre
-  // ─────────────────────────────────────────────────────────────────
+  // ── DEPTH (idéntico al arquitecto) ───────────────────────────
   const depth = new Array(nQ).fill(0);
   const placed = gates.map(g => {
     let col;
     if(g.q3 !== undefined){
       col = Math.max(depth[g.q]||0, depth[g.q2]||0, depth[g.q3]||0);
-      depth[g.q] = col+1; depth[g.q2] = col+1; depth[g.q3] = col+1;
+      depth[g.q]=col+1; depth[g.q2]=col+1; depth[g.q3]=col+1;
     } else if(g.q2 !== undefined){
       col = Math.max(depth[g.q]||0, depth[g.q2]||0);
-      depth[g.q] = col+1; depth[g.q2] = col+1;
+      depth[g.q]=col+1; depth[g.q2]=col+1;
     } else {
       col = depth[g.q]||0;
-      depth[g.q] = col+1;
+      depth[g.q]=col+1;
     }
     return {...g, col};
   });
 
-  // ─────────────────────────────────────────────────────────────────
-  // PASO 6: Renderizar — IDÉNTICO al arquitecto cuántico (HTML+SVG posicionado)
-  // ROW_HEIGHT=56, step=52, left=col*step+15
-  // ─────────────────────────────────────────────────────────────────
+  // ── RENDER (idéntico al arquitecto: HTML + SVG posicionado) ──
   const ROW_HEIGHT = 56;
-  const step = 52;
-  const totalCols = Math.max(...depth, 1);
-  const wireWidth = totalCols * step + 90;
-  const totalH    = nQ * ROW_HEIGHT;
+  const step       = 52;
+  const totalCols  = Math.max(...depth, 1);
+  const wireWidth  = totalCols * step + 90;
+  const totalH     = nQ * ROW_HEIGHT;
+
+  // Helper: Y absoluta dentro del SVG para un qubit dado topQ
+  const qY = (q, topQ) => (q - topQ) * ROW_HEIGHT + ROW_HEIGHT/2;
 
   let html = `<div style="position:relative;min-width:${wireWidth}px;height:${totalH}px;">`;
 
-  // Cables + etiquetas de qubit
+  // Cables + etiquetas
   for(let q=0; q<nQ; q++){
-    const y = q*ROW_HEIGHT + ROW_HEIGHT/2;
     html += `<div style="position:absolute;top:${q*ROW_HEIGHT}px;left:0;right:0;height:${ROW_HEIGHT}px;">
-      <!-- etiqueta -->
-      <div style="position:absolute;left:0;top:${ROW_HEIGHT/2}px;transform:translateY(-50%);
-        width:48px;text-align:right;padding-right:6px;
+      <div style="position:absolute;left:0;top:50%;transform:translateY(-50%);
+        width:50px;text-align:right;padding-right:6px;
         font-family:JetBrains Mono,monospace;font-size:11px;font-weight:600;color:#bd93f9;">
         ${escH(wireLabels[q]||`q[${q}]`)}
       </div>
-      <!-- cable -->
-      <div style="position:absolute;left:50px;right:0;top:${ROW_HEIGHT/2}px;height:0;
+      <div style="position:absolute;left:52px;right:0;top:50%;
         border-top:1.8px solid rgba(0,136,255,.22);"></div>
     </div>`;
   }
 
   // Puertas
   placed.forEach(g => {
-    const left = g.col * step + 54; // offset de las etiquetas
+    const left = g.col * step + 56;
 
+    // ── PUERTAS 3 QUBITS ────────────────────────────────────────
     if(g.q3 !== undefined){
-      // ── PUERTAS 3 QUBITS (Toffoli CCX, Fredkin CSW) ─────────────
-      const qs    = [g.q, g.q2, g.q3].sort((a,b)=>a-b);
-      const topQ  = qs[0];
-      const topY  = topQ * ROW_HEIGHT;
-      const svgH  = (qs[2]-qs[0]) * ROW_HEIGHT + ROW_HEIGHT;
-      const gc    = g.bg || '#005f6a';
-      // Convertir qubit absoluto → Y en el SVG
-      const qY = q => (q - topQ) * ROW_HEIGHT + ROW_HEIGHT/2;
-      let svg = '';
+      const qs   = [g.q, g.q2, g.q3].sort((a,b)=>a-b);
+      const topQ = qs[0];
+      const svgH = (qs[2]-qs[0]) * ROW_HEIGHT + ROW_HEIGHT;
+      const topY = topQ * ROW_HEIGHT;
+      const gc2  = g.bg || '#005f6a';
+      let svg    = '';
 
       if(g.id === 'CCX'){
-        // ── TOFFOLI ── 2 controles ● + 1 target ⊕
-        // Usar ctrlQ1, ctrlQ2, tgtQ si están disponibles; si no, asumir orden natural
-        const ctrl1 = g.ctrlQ1 !== undefined ? g.ctrlQ1 : qs[0];
-        const ctrl2 = g.ctrlQ2 !== undefined ? g.ctrlQ2 : qs[1];
-        const tgt   = g.tgtQ   !== undefined ? g.tgtQ   : qs[2];
+        const c1 = g.ctrlQ1 !== undefined ? g.ctrlQ1 : qs[0];
+        const c2 = g.ctrlQ2 !== undefined ? g.ctrlQ2 : qs[1];
+        const t  = g.tgtQ   !== undefined ? g.tgtQ   : qs[2];
         svg = `<svg width="52" height="${svgH}" viewBox="0 0 52 ${svgH}">
-          <!-- línea vertical de extremo a extremo -->
-          <line x1="26" y1="${qY(qs[0])}" x2="26" y2="${qY(qs[2])}"
-            stroke="${gc}" stroke-width="2.5"/>
-          <!-- control 1 ● -->
-          <circle cx="26" cy="${qY(ctrl1)}"
-            r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-          <!-- control 2 ● -->
-          <circle cx="26" cy="${qY(ctrl2)}"
-            r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-          <!-- target ⊕ (círculo vacío + cruz) -->
-          <circle cx="26" cy="${qY(tgt)}"
-            r="14" fill="none" stroke="${gc}" stroke-width="2.5"/>
-          <line x1="18" y1="${qY(tgt)}" x2="34" y2="${qY(tgt)}"
-            stroke="${gc}" stroke-width="2"/>
-          <line x1="26" y1="${qY(tgt)-10}" x2="26" y2="${qY(tgt)+10}"
-            stroke="${gc}" stroke-width="2"/>
+          <line x1="26" y1="${qY(qs[0],topQ)}" x2="26" y2="${qY(qs[2],topQ)}"
+            stroke="${gc2}" stroke-width="2.5"/>
+          <circle cx="26" cy="${qY(c1,topQ)}" r="8"
+            fill="${gc2}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <circle cx="26" cy="${qY(c2,topQ)}" r="8"
+            fill="${gc2}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <circle cx="26" cy="${qY(t,topQ)}" r="14"
+            fill="none" stroke="${gc2}" stroke-width="2.5"/>
+          <line x1="18" y1="${qY(t,topQ)}" x2="34" y2="${qY(t,topQ)}"
+            stroke="${gc2}" stroke-width="2"/>
+          <line x1="26" y1="${qY(t,topQ)-10}" x2="26" y2="${qY(t,topQ)+10}"
+            stroke="${gc2}" stroke-width="2"/>
         </svg>`;
       } else {
-        // ── FREDKIN (CSW) ── 1 control ● + 2 swap ×
+        // Fredkin CSW
         const ctrl  = g.ctrlQ1 !== undefined ? g.ctrlQ1 : qs[0];
-        const swap1 = qs.find(q=>q!==ctrl) || qs[1];
-        const swap2 = qs.filter(q=>q!==ctrl).pop() || qs[2];
+        const sw1   = qs.find(q=>q!==ctrl)    || qs[1];
+        const sw2   = qs.filter(q=>q!==ctrl).pop() || qs[2];
         svg = `<svg width="52" height="${svgH}" viewBox="0 0 52 ${svgH}">
-          <line x1="26" y1="${qY(qs[0])}" x2="26" y2="${qY(qs[2])}"
-            stroke="${gc}" stroke-width="2.5"/>
-          <!-- control ● -->
-          <circle cx="26" cy="${qY(ctrl)}"
-            r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-          <!-- swap × primero -->
-          <line x1="18" y1="${qY(swap1)-8}" x2="34" y2="${qY(swap1)+8}"
-            stroke="${gc}" stroke-width="2.2"/>
-          <line x1="34" y1="${qY(swap1)-8}" x2="18" y2="${qY(swap1)+8}"
-            stroke="${gc}" stroke-width="2.2"/>
-          <!-- swap × segundo -->
-          <line x1="18" y1="${qY(swap2)-8}" x2="34" y2="${qY(swap2)+8}"
-            stroke="${gc}" stroke-width="2.2"/>
-          <line x1="34" y1="${qY(swap2)-8}" x2="18" y2="${qY(swap2)+8}"
-            stroke="${gc}" stroke-width="2.2"/>
+          <line x1="26" y1="${qY(qs[0],topQ)}" x2="26" y2="${qY(qs[2],topQ)}"
+            stroke="${gc2}" stroke-width="2.5"/>
+          <circle cx="26" cy="${qY(ctrl,topQ)}" r="8"
+            fill="${gc2}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <line x1="18" y1="${qY(sw1,topQ)-8}" x2="34" y2="${qY(sw1,topQ)+8}" stroke="${gc2}" stroke-width="2.2"/>
+          <line x1="34" y1="${qY(sw1,topQ)-8}" x2="18" y2="${qY(sw1,topQ)+8}" stroke="${gc2}" stroke-width="2.2"/>
+          <line x1="18" y1="${qY(sw2,topQ)-8}" x2="34" y2="${qY(sw2,topQ)+8}" stroke="${gc2}" stroke-width="2.2"/>
+          <line x1="34" y1="${qY(sw2,topQ)-8}" x2="18" y2="${qY(sw2,topQ)+8}" stroke="${gc2}" stroke-width="2.2"/>
         </svg>`;
       }
       html += `<div style="position:absolute;left:${left}px;top:${topY}px;">${svg}</div>`;
 
+    // ── PUERTAS 2 QUBITS ─────────────────────────────────────
     } else if(g.q2 !== undefined){
-      // ── PUERTAS 2 QUBITS (CX, CZ, SWAP, genéricas) ──────────────
-      // g.q  = qubit de menor índice (topQ)
-      // g.q2 = qubit de mayor índice (botQ)
-      // g.ctrlQ = qubit REAL del control (puede ser cualquiera de los dos)
-      // g.tgtQ  = qubit REAL del target
-      const topQ   = Math.min(g.q, g.q2);
-      const botQ   = Math.max(g.q, g.q2);
-      const topY   = topQ * ROW_HEIGHT;
-      const height = (botQ - topQ) * ROW_HEIGHT;
-      const gc     = g.bg || '#007070';
+      const topQ  = Math.min(g.q, g.q2);
+      const botQ  = Math.max(g.q, g.q2);
+      const topY  = topQ * ROW_HEIGHT;
+      const svgH  = (botQ - topQ) * ROW_HEIGHT + ROW_HEIGHT;
+      const gc2   = g.bg || '#007070';
 
-      // Calcular Y dentro del SVG para control y target
-      // SVG empieza en topQ — posición relativa = (qubit - topQ) * ROW_HEIGHT + ROW_HEIGHT/2
-      const ctrlQ  = g.ctrlQ !== undefined ? g.ctrlQ : topQ;  // default: ctrl arriba
-      const tgtQ   = g.tgtQ  !== undefined ? g.tgtQ  : botQ;  // default: tgt abajo
-      const ctrlY  = (ctrlQ - topQ) * ROW_HEIGHT + ROW_HEIGHT/2;
-      const tgtY   = (tgtQ  - topQ) * ROW_HEIGHT + ROW_HEIGHT/2;
-      const svgH   = ROW_HEIGHT + height;
+      // Posiciones Y reales del control y target dentro del SVG
+      const ctrlQ = g.ctrlQ !== undefined ? g.ctrlQ : topQ;
+      const tgtQ  = g.tgtQ  !== undefined ? g.tgtQ  : botQ;
+      const ctrlY = qY(ctrlQ, topQ);
+      const tgtY  = qY(tgtQ,  topQ);
+      const lineY1 = Math.min(ctrlY, tgtY);
+      const lineY2 = Math.max(ctrlY, tgtY);
 
       let svg = '';
 
-      if(g.id === 'CX' && !g.isCZ){
-        // ── CNOT ── control ● en ctrlY, target ⊕ en tgtY
+      if(g.id === 'CX'){
+        // ── CNOT ── ● control + ⊕ target (círculo vacío + cruz)
         svg = `<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
-          <!-- línea vertical entre control y target -->
-          <line x1="24" y1="${Math.min(ctrlY,tgtY)}" x2="24" y2="${Math.max(ctrlY,tgtY)}"
-            stroke="${gc}" stroke-width="2.5"/>
-          <!-- control ● -->
-          <circle cx="24" cy="${ctrlY}"
-            r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-          <!-- target ⊕ (círculo vacío + cruz) -->
-          <circle cx="24" cy="${tgtY}"
-            r="14" fill="none" stroke="${gc}" stroke-width="2.5"/>
-          <line x1="16" y1="${tgtY}" x2="32" y2="${tgtY}" stroke="${gc}" stroke-width="2"/>
-          <line x1="24" y1="${tgtY-10}" x2="24" y2="${tgtY+10}" stroke="${gc}" stroke-width="2"/>
+          <line x1="24" y1="${lineY1}" x2="24" y2="${lineY2}"
+            stroke="${gc2}" stroke-width="2.5"/>
+          <circle cx="24" cy="${ctrlY}" r="8"
+            fill="${gc2}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <circle cx="24" cy="${tgtY}" r="14"
+            fill="none" stroke="${gc2}" stroke-width="2.5"/>
+          <line x1="16" y1="${tgtY}" x2="32" y2="${tgtY}"
+            stroke="${gc2}" stroke-width="2"/>
+          <line x1="24" y1="${tgtY-10}" x2="24" y2="${tgtY+10}"
+            stroke="${gc2}" stroke-width="2"/>
         </svg>`;
 
-      } else if(g.id === 'CZ' || g.isCZ){
-        // ── CZ ── dos puntos ● en ambos qubits (simérico)
+      } else if(g.id === 'CZ'){
+        // ── CZ ── ● ambos extremos (simétrico)
         svg = `<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
-          <line x1="24" y1="${ctrlY}" x2="24" y2="${tgtY}"
-            stroke="${gc}" stroke-width="2.5"/>
-          <circle cx="24" cy="${ctrlY}"
-            r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-          <circle cx="24" cy="${tgtY}"
-            r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <line x1="24" y1="${lineY1}" x2="24" y2="${lineY2}"
+            stroke="${gc2}" stroke-width="2.5"/>
+          <circle cx="24" cy="${ctrlY}" r="8"
+            fill="${gc2}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <circle cx="24" cy="${tgtY}" r="8"
+            fill="${gc2}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
         </svg>`;
 
       } else if(g.id === 'SWAP'){
-        // ── SWAP ── dos × en ctrlY y tgtY conectados
+        // ── SWAP ── × en ambos qubits conectados
         svg = `<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
-          <line x1="24" y1="${ctrlY}" x2="24" y2="${tgtY}"
-            stroke="${gc}" stroke-width="2.5"/>
-          <!-- × arriba -->
-          <line x1="16" y1="${ctrlY-8}" x2="32" y2="${ctrlY+8}" stroke="${gc}" stroke-width="2.2"/>
-          <line x1="32" y1="${ctrlY-8}" x2="16" y2="${ctrlY+8}" stroke="${gc}" stroke-width="2.2"/>
-          <!-- × abajo -->
-          <line x1="16" y1="${tgtY-8}"  x2="32" y2="${tgtY+8}"  stroke="${gc}" stroke-width="2.2"/>
-          <line x1="32" y1="${tgtY-8}"  x2="16" y2="${tgtY+8}"  stroke="${gc}" stroke-width="2.2"/>
+          <line x1="24" y1="${lineY1}" x2="24" y2="${lineY2}"
+            stroke="${gc2}" stroke-width="2.5"/>
+          <line x1="14" y1="${ctrlY-9}" x2="34" y2="${ctrlY+9}" stroke="${gc2}" stroke-width="2.5"/>
+          <line x1="34" y1="${ctrlY-9}" x2="14" y2="${ctrlY+9}" stroke="${gc2}" stroke-width="2.5"/>
+          <line x1="14" y1="${tgtY-9}"  x2="34" y2="${tgtY+9}"  stroke="${gc2}" stroke-width="2.5"/>
+          <line x1="34" y1="${tgtY-9}"  x2="14" y2="${tgtY+9}"  stroke="${gc2}" stroke-width="2.5"/>
         </svg>`;
 
       } else {
-        // ── Puerta controlada genérica ── ● control + caja target
-        const sym   = g.sym || g.id;
-        const fs    = sym.length <= 2 ? 13 : sym.length === 3 ? 11 : 9;
-        const boxY  = tgtY - 19;   // top de la caja centrada en tgtY
+        // ── Controlada genérica (CH, CY, CRx...) ── ● ctrl + caja target
+        const sym  = g.sym || g.id;
+        const fs   = sym.length<=2?13:sym.length===3?11:9;
+        const boxY = tgtY - 19;
         svg = `<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
-          <line x1="24" y1="${Math.min(ctrlY,tgtY)}" x2="24" y2="${Math.max(ctrlY,tgtY)}"
-            stroke="${gc}" stroke-width="2.5"/>
-          <!-- control ● -->
-          <circle cx="24" cy="${ctrlY}"
-            r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-          <!-- target: caja con gradiente -->
+          <line x1="24" y1="${lineY1}" x2="24" y2="${lineY2}"
+            stroke="${gc2}" stroke-width="2.5"/>
+          <circle cx="24" cy="${ctrlY}" r="8"
+            fill="${gc2}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
           <rect x="4" y="${boxY}" width="40" height="38" rx="6"
-            fill="${gc}" stroke="rgba(255,255,255,.28)" stroke-width="1.4" fill-opacity=".85"/>
+            fill="${gc2}" stroke="rgba(255,255,255,.28)" stroke-width="1.4" fill-opacity=".85"/>
           <rect x="6" y="${boxY+2}" width="36" height="4" rx="4" fill="rgba(255,255,255,.18)"/>
           <text x="24" y="${tgtY+fs/3}"
             text-anchor="middle" font-family="JetBrains Mono,monospace"
@@ -1104,50 +1167,39 @@ function buildCircuitOut(text){
       }
       html += `<div style="position:absolute;left:${left}px;top:${topY}px;">${svg}</div>`;
 
+    // ── PUERTAS 1 QUBIT ──────────────────────────────────────
     } else {
-      // ── PUERTAS 1 QUBIT ─────────────────────────────────────────
       const yPos = g.q * ROW_HEIGHT;
-      const gc   = g.bg || '#1a4a8a';
-      const sym  = (g.sym||g.id||'?');
-      const display = sym.length > 4 ? sym.slice(0,3) : sym;
-      const fs   = display.length <= 2 ? 13 : display.length === 3 ? 11 : 9;
+      const gc2  = g.bg || '#1a4a8a';
+      const sym  = g.sym || g.id || '?';
+      const display = sym.length>4 ? sym.slice(0,3) : sym;
+      const fs   = display.length<=2?13:display.length===3?11:9;
 
-      if(g.id === 'M' || g.name === 'M'){
-        // Medidor: caja marrón con arco y aguja (igual al arquitecto)
+      if(g.id === 'M'){
         html += `<div style="position:absolute;left:${left}px;top:${yPos+ROW_HEIGHT/2}px;transform:translateY(-50%);">
           <svg width="44" height="38" viewBox="0 0 44 38">
             <rect x="1" y="1" width="42" height="36" rx="6"
               fill="rgba(109,76,65,.3)" stroke="#6d4c41" stroke-width="1.8"/>
             <rect x="3" y="3" width="38" height="4" rx="4" fill="rgba(255,255,255,.12)"/>
-            <!-- arco de medición -->
-            <path d="M 10 28 A 12 12 0 0 1 34 28"
+            <path d="M 8 30 A 14 14 0 0 1 36 30"
               fill="none" stroke="#ff9580" stroke-width="1.8" stroke-linecap="round"/>
-            <!-- aguja -->
-            <line x1="22" y1="28" x2="30" y2="14"
-              stroke="#ff9580" stroke-width="1.5" stroke-linecap="round"/>
-            <!-- punto base aguja -->
-            <circle cx="22" cy="28" r="2" fill="#ff9580"/>
+            <line x1="22" y1="30" x2="32" y2="13"
+              stroke="#ff9580" stroke-width="1.6" stroke-linecap="round"/>
+            <circle cx="22" cy="30" r="2.5" fill="#ff9580"/>
           </svg>
         </div>`;
       } else {
-        // Caja estándar con gradiente (igual al arquitecto)
         html += `<div style="position:absolute;left:${left}px;top:${yPos+ROW_HEIGHT/2}px;transform:translateY(-50%);">
           <svg width="44" height="38" viewBox="0 0 44 38">
             <defs>
-              <linearGradient id="gg${g.col}_${g.q}" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="${gc}" stop-opacity=".92"/>
-                <stop offset="100%" stop-color="${gc}" stop-opacity=".55"/>
+              <linearGradient id="gq${g.col}_${g.q}" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="${gc2}" stop-opacity=".95"/>
+                <stop offset="100%" stop-color="${gc2}" stop-opacity=".6"/>
               </linearGradient>
             </defs>
-            <!-- sombra -->
-            <rect x="2" y="2" width="42" height="38" rx="7"
-              fill="${gc}" opacity=".18"/>
-            <!-- caja principal -->
             <rect x="1" y="1" width="42" height="36" rx="6"
-              fill="url(#gg${g.col}_${g.q})" stroke="rgba(255,255,255,.28)" stroke-width="1.4"/>
-            <!-- brillo superior -->
+              fill="url(#gq${g.col}_${g.q})" stroke="rgba(255,255,255,.3)" stroke-width="1.4"/>
             <rect x="3" y="3" width="38" height="4" rx="4" fill="rgba(255,255,255,.2)"/>
-            <!-- texto -->
             <text x="22" y="${19+fs/3}" text-anchor="middle"
               font-family="JetBrains Mono,monospace"
               font-size="${fs}" font-weight="bold" fill="white">${escH(display)}</text>
@@ -1164,6 +1216,7 @@ function buildCircuitOut(text){
     ${html}
   </div>`;
 }
+
 
 
 function buildProbsOut(probs,shots,sim){
