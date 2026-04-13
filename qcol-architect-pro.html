@@ -531,22 +531,28 @@ function activateExpositionMode(){
   _originalCells=JSON.parse(JSON.stringify(cells));
   document.body.classList.add('expo-mode');
   document.getElementById('expo-badge').style.display='inline-flex';
-  ['btn-add-code','btn-add-qk','btn-add-md','btn-import','btn-download','btn-save','btn-publish','stab-2'].forEach(id=>{
+  ['btn-add-code','btn-add-qk','btn-add-md','btn-import',
+   'btn-download','btn-save','btn-publish','stab-2'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.style.display='none';
   });
   const rst=document.getElementById('btn-restore-all');if(rst)rst.style.display='';
   const ni=document.getElementById('nb-name-inp');if(ni){ni.readOnly=true;ni.style.opacity='.6';}
-  notify('👁 Modo exposición — ejecuta y experimenta libremente');
+  // CRÍTICO: re-renderizar para que todas las celdas Markdown queden en modo lectura
+  // y las celdas de código pierdan doble-click y toolbar de edición
+  renderCells();
+  notify('👁 Modo exposición — lee el material y experimenta con el código');
 }
 function deactivateExpositionMode(){
   _expositionMode=false;_originalCells=null;
   document.body.classList.remove('expo-mode');
   document.getElementById('expo-badge').style.display='none';
-  ['btn-add-code','btn-add-qk','btn-add-md','btn-import','btn-download','btn-save','btn-publish','stab-2'].forEach(id=>{
+  ['btn-add-code','btn-add-qk','btn-add-md','btn-import',
+   'btn-download','btn-save','btn-publish','stab-2'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.style.display='';
   });
   const rst=document.getElementById('btn-restore-all');if(rst)rst.style.display='none';
   const ni=document.getElementById('nb-name-inp');if(ni){ni.readOnly=false;ni.style.opacity='';}
+  renderCells();
 }
 function restoreAllCells(){
   if(!_originalCells){notify('Sin datos originales');return;}
@@ -697,284 +703,446 @@ function buildTextOut(text){
 function buildCircuitOut(text){
   if(!text.trim()) return '';
 
-  const allLines = text.split('\n');
-  // Detectar líneas de qubit: q_0: o q[0]: o qr[0]:
-  const wireLines = allLines.filter(l => /^\s*(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/.test(l));
+  // ─────────────────────────────────────────────────────────────────
+  // PASO 1: Parsear texto ASCII → estructura de gates igual al arquitecto
+  // El arquitecto usa: { id, q, q2?, q3?, def:{bg,glow,sym}, col }
+  // ─────────────────────────────────────────────────────────────────
+  const lines = text.split('\n');
 
-  // Sin qubit wires reconocibles → ASCII coloreado de fallback
+  // Encontrar líneas de qubit: "q_0: ─H─..." o "q[0]: ─H─..."
+  const wireLines = [];
+  const wireIdx   = []; // índice original en lines[]
+  lines.forEach((l,i)=>{
+    if(/^\s*(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/.test(l)){
+      wireLines.push(l);
+      wireIdx.push(i);
+    }
+  });
+
   if(wireLines.length === 0){
+    // Fallback ASCII coloreado
     let col = escH(text);
-    col = col.replace(/(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/g,
-      '<span style="color:#bd93f9;font-weight:700">$1</span>:');
-    col = col.replace(/┤\s*([A-Za-z0-9√Rπ/.+\-]+)\s*[├┤]/g,
-      (m,g)=>`┤<span style="color:#00aaff;font-weight:700"> ${g} </span>┤`);
-    col = col.replace(/─(M)─/g,'─<span style="color:#ff9580;font-weight:700">$1</span>─');
-    col = col.replace(/(c:\s*\d+\/)/g,'<span style="color:#636e8a">$1</span>');
-    return `<div style="padding:.4rem .5rem;background:#020c18;border-top:1px solid rgba(0,136,255,.1);">
-      <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.1rem 0 .3rem;letter-spacing:.05em;">⚛ DIAGRAMA DEL CIRCUITO</div>
+    col = col.replace(/(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/g,'<s style="color:#bd93f9;font-weight:700;font-style:normal">$1</s>:');
+    col = col.replace(/┤\s*([A-Za-z0-9√Rπ/.+\-]+)\s*[├┤]/g,(m,g)=>`┤<s style="color:#00aaff;font-weight:700;font-style:normal"> ${g} </s>┤`);
+    col = col.replace(/─(M)─/g,'─<s style="color:#ff9580;font-weight:700;font-style:normal">M</s>─');
+    return `<div style="padding:.4rem .55rem;background:#020c18;border-top:1px solid rgba(0,136,255,.1);">
+      <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.1rem 0 .3rem;">⚛ DIAGRAMA DEL CIRCUITO</div>
       <div class="out-circuit-text">${col}</div>
     </div>`;
   }
 
-  // ── PARSER COMPLETO DE PUERTAS ────────────────────────────────
-  // Extraemos la parte de contenido de cada qubit (después del ":")
   const nQ = wireLines.length;
-  const wireContents = wireLines.map(l => {
-    const m = l.match(/^.*?:\s*(.*)/);
+
+  // Extraer label y contenido de cada wire
+  const wireLabels   = wireLines.map(l=>(l.match(/^\s*(q_?\d+|q\[\d+\]|qr\[\d+\])/)||['','q'])[1]);
+  const wireContents = wireLines.map(l=>{
+    const m = l.match(/^\s*(?:q_?\d+|q\[\d+\]|qr\[\d+\])\s*:\s*(.*)/);
     return m ? m[1] : '';
   });
 
-  // Para encontrar columnas de puertas usamos la posición de caracteres en el texto
-  // Cada "columna" es una posición X en el wire
-  // Recorremos carácter a carácter la wire más larga buscando tokens de puerta
-
-  // Primero normalizamos longitudes rellenando con espacios
-  const maxLen = Math.max(...wireContents.map(w => w.length));
-  const padded = wireContents.map(w => w.padEnd(maxLen, '─'));
-
-  // Detectar posiciones de puertas por columna
-  // Una puerta puede ser: ┤ X ├  ─■─  ─⊕─  ─×─  ─M─  o un bloque continuo
-  // Estrategia: en cada posición X, buscar qué tiene cada qubit
-  // Generamos lista de "columnas de puertas" agrupadas
-
-  function tokenizeWire(wire){
-    // Devuelve array de {start, end, name}
-    const tokens = [];
-    let i = 0;
-    while(i < wire.length){
-      const ch = wire[i];
-      // Caja estándar: ┤...├  o ┤...┤
-      if(ch === '┤'){
-        const end = wire.indexOf('├', i+1) !== -1 && wire.indexOf('├', i+1) < wire.indexOf('┤', i+1)
-          ? wire.indexOf('├', i+1)
-          : wire.indexOf('┤', i+1);
-        if(end > i){
-          const name = wire.slice(i+1, end).trim().replace(/\s+/g,' ');
-          tokens.push({start:i, end:end+1, name: name||'?'});
-          i = end+1;
-        } else i++;
-      // Control dot ■
-      } else if(ch === '■'){
-        tokens.push({start:i, end:i+1, name:'■'});
-        i++;
-      // CNOT target ⊕
-      } else if(ch === '⊕'){
-        tokens.push({start:i, end:i+1, name:'⊕'});
-        i++;
-      // SWAP × o X entre cables
-      } else if(ch === '×'){
-        tokens.push({start:i, end:i+1, name:'×'});
-        i++;
-      // Medidor M
-      } else if(ch === 'M'){
-        tokens.push({start:i, end:i+1, name:'M'});
-        i++;
-      } else {
-        i++;
+  // ─────────────────────────────────────────────────────────────────
+  // PASO 2: Tokenizar cada wire → lista de tokens con posición de carácter
+  // Tipos: box (┤NAME├), ctrl (■), tgt (⊕), swap (×), meas (M)
+  // ─────────────────────────────────────────────────────────────────
+  function tokenize(wire){
+    const toks = [];
+    // Regex unificada — orden importa
+    const RE = /┤([^┤├╪]*?)(?:├|┤)|(■)|(⊕)|(×)|((?<!\w)M(?=─|╫|╨|\s|$))/g;
+    let m;
+    while((m = RE.exec(wire)) !== null){
+      if(m[1] !== undefined){
+        toks.push({type:'box', name:m[1].trim()||'?', start:m.index, end:m.index+m[0].length});
+      } else if(m[2]){
+        toks.push({type:'ctrl', name:'■', start:m.index, end:m.index+1});
+      } else if(m[3]){
+        toks.push({type:'tgt',  name:'⊕', start:m.index, end:m.index+1});
+      } else if(m[4]){
+        toks.push({type:'swap', name:'×', start:m.index, end:m.index+1});
+      } else if(m[5]){
+        toks.push({type:'meas', name:'M',  start:m.index, end:m.index+1});
       }
     }
-    return tokens;
+    return toks;
   }
 
-  const wireToks = padded.map(w => tokenizeWire(w));
+  const wireToks = wireContents.map(w => tokenize(w));
 
-  // Alinear columnas: agrupar tokens que comparten posición X aproximada
-  // Usamos el centro de cada token para agrupar
-  const allPositions = [];
-  wireToks.forEach((toks, qi) => {
-    toks.forEach(t => {
-      const mid = (t.start + t.end) / 2;
-      allPositions.push({qi, tok:t, mid});
-    });
-  });
+  // ─────────────────────────────────────────────────────────────────
+  // PASO 3: Agrupar tokens en columnas por posición de carácter
+  // Tokens en posiciones solapadas → misma columna
+  // ─────────────────────────────────────────────────────────────────
+  // Collect all tokens with qubit index
+  const allToks = [];
+  wireToks.forEach((toks,qi)=>{ toks.forEach(t=>allToks.push({...t,qi})); });
+  // Sort by start position
+  allToks.sort((a,b)=>a.start-b.start || a.qi-b.qi);
 
-  // Ordenar por posición
-  allPositions.sort((a,b) => a.mid - b.mid);
-
-  // Agrupar en columnas: tokens dentro de ±3 chars de posición van juntos
-  const columns = []; // [{qi→tok}]
-  for(const p of allPositions){
+  // Group into columns: tokens overlap if their char ranges intersect ±2
+  const rawCols = []; // each col: [{qi, tok}]
+  for(const item of allToks){
     let placed = false;
-    for(const col of columns){
-      const colMids = Object.values(col).map(t => (t.start+t.end)/2);
-      const avgMid = colMids.reduce((s,v)=>s+v,0)/colMids.length;
-      if(Math.abs(p.mid - avgMid) < 4){
-        col[p.qi] = p.tok;
-        placed = true;
+    for(const col of rawCols){
+      // Check if this token's position overlaps with any token in col
+      const colItems = col;
+      const overlap = colItems.some(ci=>{
+        const ciMid = (ci.tok.start+ci.tok.end)/2;
+        const itMid = (item.start+item.end)/2;
+        return Math.abs(ciMid - itMid) <= 5;
+      });
+      if(overlap){
+        // Only add if this qubit not already in col
+        if(!colItems.find(ci=>ci.qi===item.qi)){
+          colItems.push({qi:item.qi, tok:item});
+          placed = true;
+        }
         break;
       }
     }
-    if(!placed){
-      const newCol = {};
-      newCol[p.qi] = p.tok;
-      columns.push(newCol);
-    }
+    if(!placed) rawCols.push([{qi:item.qi, tok:item}]);
   }
 
-  // ── SVG RENDERER — idéntico al Arquitecto Cuántico ────────────
-  const ROW = 56;      // altura por qubit (igual al arquitecto)
-  const GATE_W = 44;   // ancho de caja de puerta
-  const GATE_H = 38;   // altura de caja de puerta
-  const STEP = 60;     // espacio horizontal entre columnas
-  const PAD_L = 60;    // padding izquierdo para etiquetas
-  const PAD_T = 10;    // padding superior
-  const PAD_R = 24;    // padding derecho
-  const PAD_B = 16;    // padding inferior
-
-  const nCols = columns.length;
-  const W = PAD_L + nCols * STEP + PAD_R;
-  const H = PAD_T + nQ * ROW + PAD_B;
-
-  // Colores por puerta — idénticos al arquitecto
+  // ─────────────────────────────────────────────────────────────────
+  // PASO 4: Convertir columnas a gates (como circuit.gates del arquitecto)
+  // gate = { id, sym, bg, glow, q, q2?, q3?, col }
+  // ─────────────────────────────────────────────────────────────────
   const COLORS = {
     H:'#1a5fb4', X:'#c01c28', Y:'#7a3e99', Z:'#1c71d8',
     S:'#c64600', T:'#26a269', SX:'#c01c28', '√X':'#c01c28',
-    RX:'#0077c2', RY:'#005f6a', RZ:'#5e35b1',
+    RX:'#0077c2', RY:'#005f6a', RZ:'#5e35b1', P:'#5e35b1',
     CX:'#007070', CZ:'#00695c', SWAP:'#1565c0',
     CCX:'#005f6a', CSW:'#283593', M:'#6d4c41',
-    '■':'#0088ff', '⊕':'#007070', '×':'#1565c0',
+    DEFAULT:'#1a4a8a'
   };
-  function gateColor(name){
-    const k = name.toUpperCase().replace(/\s*\(.*\)/,'').trim();
-    return COLORS[k] || COLORS[name] || '#2a5a9a';
+  function gColor(name){
+    const k = name.replace(/\s*\(.*\)/,'').trim().toUpperCase();
+    return COLORS[k] || COLORS[name] || COLORS.DEFAULT;
   }
 
-  // Unique filter IDs per SVG instance
-  const uid = Math.random().toString(36).slice(2,7);
+  const gates = [];
+  rawCols.forEach((colItems, ci)=>{
+    const sorted = colItems.slice().sort((a,b)=>a.qi-b.qi);
+    const nItems = sorted.length;
 
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"
-    viewBox="0 0 ${W} ${H}"
-    style="background:#020c18;border-radius:8px;display:block;overflow:visible;">
-  <defs>
-    <filter id="glow${uid}">
-      <feGaussianBlur stdDeviation="2.5" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>`;
-
-  // ── 1. CABLES ─────────────────────────────────────────────────
-  for(let q = 0; q < nQ; q++){
-    const y = PAD_T + q * ROW + ROW/2;
-    const lbl = wireLines[q].match(/^\s*(q_?\d+|q\[\d+\]|qr\[\d+\])/)?.[1] || `q[${q}]`;
-    // Cable horizontal
-    svg += `<line x1="${PAD_L - 8}" y1="${y}" x2="${W - PAD_R + 4}" y2="${y}"
-      stroke="rgba(0,136,255,.22)" stroke-width="1.8"/>`;
-    // Etiqueta qubit
-    svg += `<text x="${PAD_L - 12}" y="${y + 4}" text-anchor="end"
-      font-family="JetBrains Mono,monospace" font-size="11" fill="#bd93f9"
-      font-weight="600">${escH(lbl)}</text>`;
-  }
-
-  // ── 2. PUERTAS POR COLUMNA ────────────────────────────────────
-  columns.forEach((col, ci) => {
-    const xCenter = PAD_L + ci * STEP + STEP/2;
-    const qubitsInCol = Object.keys(col).map(Number).sort((a,b)=>a-b);
-    if(!qubitsInCol.length) return;
-
-    const minQ = qubitsInCol[0];
-    const maxQ = qubitsInCol[qubitsInCol.length - 1];
-
-    // Detectar tipo de puerta compuesta
-    const names = qubitsInCol.map(q => col[q].name);
-    const hasControl  = names.includes('■');
-    const hasTarget   = names.includes('⊕');
-    const hasSWAP     = names.filter(n => n==='×').length >= 2;
-    const hasMeasure  = names.includes('M');
-    const allBoxes    = names.every(n => !['■','⊕','×','M'].includes(n));
-    const isCNOT      = hasControl && hasTarget;
-    const isSWAP      = hasSWAP && !hasControl;
-    const isCCSWAP    = hasSWAP && hasControl;
-
-    // Línea vertical conectora entre qubits involucrados
-    if(qubitsInCol.length > 1){
-      const y1 = PAD_T + minQ * ROW + ROW/2;
-      const y2 = PAD_T + maxQ * ROW + ROW/2;
-      const lineCol = hasControl ? '#0088ff' :
-                      isSWAP    ? '#1565c0' :
-                      names[0] ? gateColor(names[0]) : '#0088ff';
-      svg += `<line x1="${xCenter}" y1="${y1}" x2="${xCenter}" y2="${y2}"
-        stroke="${lineCol}" stroke-width="2.5" stroke-linecap="round"/>`;
-    }
-
-    // Dibujar cada qubit en esta columna
-    qubitsInCol.forEach(q => {
-      const tok = col[q];
+    if(nItems === 1){
+      // Puerta de 1 qubit
+      const {qi, tok} = sorted[0];
       const name = tok.name;
-      const cy = PAD_T + q * ROW + ROW/2;
-      const gx = xCenter - GATE_W/2;
-      const gy = cy - GATE_H/2;
-      const c = gateColor(name);
+      const sym  = name.length > 3 ? name.slice(0,3) : name;
+      const id   = name.toUpperCase().replace(/\s*\(.*\)/,'').replace(/[^A-Z0-9√]/g,'');
+      gates.push({id, sym, bg:gColor(name), glow:gColor(name),
+        q:qi, col:ci, type:'1q', name});
 
-      if(name === '■'){
-        // Punto de control — relleno sólido con brillo
-        svg += `<circle cx="${xCenter}" cy="${cy}" r="8"
-          fill="${c}" stroke="rgba(255,255,255,.85)" stroke-width="1.5"
-          filter="url(#glow${uid})"/>`;
+    } else {
+      // Puerta multi-qubit — identificar tipo
+      const types  = sorted.map(s=>s.tok.type);
+      const names  = sorted.map(s=>s.tok.name);
+      const qubits = sorted.map(s=>s.qi);
 
-      } else if(name === '⊕'){
-        // Target CNOT — círculo con cruz (igual arquitecto)
-        svg += `<circle cx="${xCenter}" cy="${cy}" r="14"
-          fill="none" stroke="${c}" stroke-width="2.5"/>`;
-        svg += `<line x1="${xCenter-14}" y1="${cy}" x2="${xCenter+14}" y2="${cy}"
-          stroke="${c}" stroke-width="2"/>`;
-        svg += `<line x1="${xCenter}" y1="${cy-14}" x2="${xCenter}" y2="${cy+14}"
-          stroke="${c}" stroke-width="2"/>`;
+      const ctrlIdxs = sorted.filter(s=>s.tok.type==='ctrl').map(s=>s.qi);
+      const tgtIdxs  = sorted.filter(s=>s.tok.type==='tgt') .map(s=>s.qi);
+      const swapIdxs = sorted.filter(s=>s.tok.type==='swap').map(s=>s.qi);
+      const measIdxs = sorted.filter(s=>s.tok.type==='meas').map(s=>s.qi);
+      const boxIdxs  = sorted.filter(s=>s.tok.type==='box' ).map(s=>s.qi);
 
-      } else if(name === '×'){
-        // SWAP target — X (igual arquitecto)
-        svg += `<line x1="${xCenter-9}" y1="${cy-9}" x2="${xCenter+9}" y2="${cy+9}"
-          stroke="${c}" stroke-width="2.5" stroke-linecap="round"/>`;
-        svg += `<line x1="${xCenter+9}" y1="${cy-9}" x2="${xCenter-9}" y2="${cy+9}"
-          stroke="${c}" stroke-width="2.5" stroke-linecap="round"/>`;
-
-      } else if(name === 'M'){
-        // Medidor — caja especial con arco de medición
-        svg += `<rect x="${gx}" y="${gy}" width="${GATE_W}" height="${GATE_H}"
-          rx="5" fill="rgba(109,76,65,.3)" stroke="#6d4c41" stroke-width="1.8"/>`;
-        // Icono de medidor: arco + aguja
-        const mx = xCenter, my = cy + 4, mr = 10;
-        svg += `<path d="M ${mx-mr} ${my} A ${mr} ${mr} 0 0 1 ${mx+mr} ${my}"
-          fill="none" stroke="#ff9580" stroke-width="1.8"/>`;
-        svg += `<line x1="${mx}" y1="${my}" x2="${mx+6}" y2="${my-8}"
-          stroke="#ff9580" stroke-width="1.5" stroke-linecap="round"/>`;
-
+      if(ctrlIdxs.length > 0 && tgtIdxs.length > 0){
+        // CX (CNOT): control ■ + target ⊕
+        const minQ = Math.min(...ctrlIdxs,...tgtIdxs);
+        const maxQ = Math.max(...ctrlIdxs,...tgtIdxs);
+        if(ctrlIdxs.length === 2 && tgtIdxs.length === 1){
+          // Toffoli CCX
+          const qs = [...ctrlIdxs,...tgtIdxs].sort((a,b)=>a-b);
+          gates.push({id:'CCX', sym:'CCX', bg:'#005f6a', glow:'#005f6a',
+            q:qs[0], q2:qs[1], q3:qs[2], col:ci, type:'3q'});
+        } else {
+          // CX normal
+          gates.push({id:'CX', sym:'CX', bg:'#007070', glow:'#007070',
+            q:Math.min(...ctrlIdxs), q2:Math.max(...tgtIdxs), col:ci, type:'2q'});
+        }
+      } else if(ctrlIdxs.length > 0 && swapIdxs.length >= 2){
+        // CSWAP (Fredkin)
+        const qs = [...ctrlIdxs,...swapIdxs].sort((a,b)=>a-b);
+        gates.push({id:'CSW', sym:'CSW', bg:'#283593', glow:'#283593',
+          q:qs[0], q2:qs[1], q3:qs[2], col:ci, type:'3q'});
+      } else if(swapIdxs.length >= 2){
+        // SWAP
+        gates.push({id:'SWAP', sym:'SW', bg:'#1565c0', glow:'#1565c0',
+          q:swapIdxs[0], q2:swapIdxs[swapIdxs.length-1], col:ci, type:'2q'});
+      } else if(ctrlIdxs.length > 0 && boxIdxs.length > 0){
+        // Puerta controlada genérica (CZ, CH, CY, etc.)
+        const ctrlQ = ctrlIdxs[0];
+        const tgtQ  = boxIdxs[0];
+        const boxName = sorted.find(s=>s.tok.type==='box')?.tok.name || 'Z';
+        const isCZ = boxName.toUpperCase() === 'Z';
+        gates.push({id: isCZ?'CZ':'CX', sym:boxName, bg:gColor(boxName), glow:gColor(boxName),
+          q:Math.min(ctrlQ,tgtQ), q2:Math.max(ctrlQ,tgtQ), col:ci, type:'2q',
+          isCZ: isCZ || boxName.toUpperCase() !== 'X'
+        });
+      } else if(measIdxs.length > 1 || (measIdxs.length > 0 && nItems > 1)){
+        // Múltiples medidores — dibujar individualmente
+        measIdxs.forEach(qi=>{
+          gates.push({id:'M', sym:'M', bg:'#6d4c41', glow:'#6d4c41',
+            q:qi, col:ci, type:'1q'});
+        });
+        // También las cajas si las hay
+        boxIdxs.forEach(qi=>{
+          const name = sorted.find(s=>s.qi===qi)?.tok.name||'?';
+          gates.push({id:name.toUpperCase(), sym:name, bg:gColor(name), glow:gColor(name),
+            q:qi, col:ci, type:'1q'});
+        });
       } else {
-        // Caja estándar con gradiente — igual al arquitecto
-        const gid = `g${uid}${ci}${q}`;
-        svg += `<defs>
-          <linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="${c}" stop-opacity=".92"/>
-            <stop offset="100%" stop-color="${c}" stop-opacity=".55"/>
-          </linearGradient>
-        </defs>`;
-        // Sombra/glow de la caja
-        svg += `<rect x="${gx-1}" y="${gy-1}" width="${GATE_W+2}" height="${GATE_H+2}"
-          rx="7" fill="${c}" opacity=".18"/>`;
-        // Caja principal
-        svg += `<rect x="${gx}" y="${gy}" width="${GATE_W}" height="${GATE_H}"
-          rx="6" fill="url(#${gid})" stroke="rgba(255,255,255,.28)" stroke-width="1.4"/>`;
-        // Brillo superior
-        svg += `<rect x="${gx+2}" y="${gy+2}" width="${GATE_W-4}" height="4"
-          rx="4" fill="rgba(255,255,255,.18)"/>`;
-        // Texto — truncar si es muy largo
-        const display = name.length > 4 ? name.slice(0,4) : name;
-        const fs = display.length <= 2 ? 13 : display.length === 3 ? 11 : 9;
-        svg += `<text x="${xCenter}" y="${cy + fs/3 + 1}"
-          text-anchor="middle"
-          font-family="JetBrains Mono,monospace"
-          font-size="${fs}" font-weight="bold" fill="#ffffff"
-          letter-spacing="-0.5">${escH(display)}</text>`;
+        // Varios boxes — dibujar individualmente
+        sorted.forEach(s=>{
+          const name = s.tok.name;
+          gates.push({id:name.toUpperCase().replace(/\s*\(.*\)/,''),
+            sym:name.length>3?name.slice(0,3):name, bg:gColor(name), glow:gColor(name),
+            q:s.qi, col:ci, type:'1q', name});
+        });
       }
-    });
+    }
   });
 
-  svg += '</svg>';
+  // ─────────────────────────────────────────────────────────────────
+  // PASO 5: Calcular profundidad (depth) por qubit — IDÉNTICO al arquitecto
+  // Esto elimina el solapamiento: cada gate ocupa exactamente la columna mínima libre
+  // ─────────────────────────────────────────────────────────────────
+  const depth = new Array(nQ).fill(0);
+  const placed = gates.map(g => {
+    let col;
+    if(g.q3 !== undefined){
+      col = Math.max(depth[g.q]||0, depth[g.q2]||0, depth[g.q3]||0);
+      depth[g.q] = col+1; depth[g.q2] = col+1; depth[g.q3] = col+1;
+    } else if(g.q2 !== undefined){
+      col = Math.max(depth[g.q]||0, depth[g.q2]||0);
+      depth[g.q] = col+1; depth[g.q2] = col+1;
+    } else {
+      col = depth[g.q]||0;
+      depth[g.q] = col+1;
+    }
+    return {...g, col};
+  });
 
-  return `<div style="padding:.45rem .55rem .55rem;background:#020c18;border-top:1px solid rgba(0,136,255,.1);overflow-x:auto;">
-    <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.1rem 0 .38rem;letter-spacing:.06em;">⚛ CIRCUITO CUÁNTICO</div>
-    ${svg}
+  // ─────────────────────────────────────────────────────────────────
+  // PASO 6: Renderizar — IDÉNTICO al arquitecto cuántico (HTML+SVG posicionado)
+  // ROW_HEIGHT=56, step=52, left=col*step+15
+  // ─────────────────────────────────────────────────────────────────
+  const ROW_HEIGHT = 56;
+  const step = 52;
+  const totalCols = Math.max(...depth, 1);
+  const wireWidth = totalCols * step + 90;
+  const totalH    = nQ * ROW_HEIGHT;
+
+  let html = `<div style="position:relative;min-width:${wireWidth}px;height:${totalH}px;">`;
+
+  // Cables + etiquetas de qubit
+  for(let q=0; q<nQ; q++){
+    const y = q*ROW_HEIGHT + ROW_HEIGHT/2;
+    html += `<div style="position:absolute;top:${q*ROW_HEIGHT}px;left:0;right:0;height:${ROW_HEIGHT}px;">
+      <!-- etiqueta -->
+      <div style="position:absolute;left:0;top:${ROW_HEIGHT/2}px;transform:translateY(-50%);
+        width:48px;text-align:right;padding-right:6px;
+        font-family:JetBrains Mono,monospace;font-size:11px;font-weight:600;color:#bd93f9;">
+        ${escH(wireLabels[q]||`q[${q}]`)}
+      </div>
+      <!-- cable -->
+      <div style="position:absolute;left:50px;right:0;top:${ROW_HEIGHT/2}px;height:0;
+        border-top:1.8px solid rgba(0,136,255,.22);"></div>
+    </div>`;
+  }
+
+  // Puertas
+  placed.forEach(g => {
+    const left = g.col * step + 54; // offset de las etiquetas
+
+    if(g.q3 !== undefined){
+      // ── PUERTAS 3 QUBITS (Toffoli CCX, Fredkin CSW) ─────────────
+      const qs = [g.q, g.q2, g.q3].sort((a,b)=>a-b);
+      const topY  = qs[0] * ROW_HEIGHT;
+      const height = (qs[2] - qs[0]) * ROW_HEIGHT;
+      const gc = g.bg || '#005f6a';
+      let svg = '';
+
+      if(g.id === 'CCX'){
+        // Toffoli: 2 controles (●) + 1 target (⊕ con cruz)
+        svg = `<svg width="52" height="${ROW_HEIGHT + height}"
+          viewBox="0 0 52 ${ROW_HEIGHT + height}">
+          <!-- línea vertical central -->
+          <line x1="26" y1="0" x2="26" y2="${ROW_HEIGHT + height}"
+            stroke="${gc}" stroke-width="2.5"/>
+          <!-- control 1 (qubit más arriba) -->
+          <circle cx="26" cy="${ROW_HEIGHT/2}"
+            r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <!-- control 2 (qubit intermedio) -->
+          <circle cx="26" cy="${ROW_HEIGHT/2 + (qs[1]-qs[0])*ROW_HEIGHT}"
+            r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <!-- target ⊕ (qubit más abajo) -->
+          <circle cx="26" cy="${ROW_HEIGHT/2 + height}"
+            r="14" fill="none" stroke="${gc}" stroke-width="2.5"/>
+          <line x1="18" y1="${ROW_HEIGHT/2+height}" x2="34" y2="${ROW_HEIGHT/2+height}"
+            stroke="${gc}" stroke-width="2"/>
+          <line x1="26" y1="${ROW_HEIGHT/2+height-10}" x2="26" y2="${ROW_HEIGHT/2+height+10}"
+            stroke="${gc}" stroke-width="2"/>
+        </svg>`;
+      } else {
+        // CSW Fredkin: 1 control (●) + 2 swap (×)
+        svg = `<svg width="52" height="${ROW_HEIGHT + height}"
+          viewBox="0 0 52 ${ROW_HEIGHT + height}">
+          <line x1="26" y1="0" x2="26" y2="${ROW_HEIGHT + height}"
+            stroke="${gc}" stroke-width="2.5"/>
+          <!-- control ● -->
+          <circle cx="26" cy="${ROW_HEIGHT/2}"
+            r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <!-- swap × arriba -->
+          <line x1="18" y1="${ROW_HEIGHT/2+(qs[1]-qs[0])*ROW_HEIGHT-6}"
+                x2="34" y2="${ROW_HEIGHT/2+(qs[1]-qs[0])*ROW_HEIGHT+6}"
+                stroke="${gc}" stroke-width="2"/>
+          <line x1="34" y1="${ROW_HEIGHT/2+(qs[1]-qs[0])*ROW_HEIGHT-6}"
+                x2="18" y2="${ROW_HEIGHT/2+(qs[1]-qs[0])*ROW_HEIGHT+6}"
+                stroke="${gc}" stroke-width="2"/>
+          <!-- swap × abajo -->
+          <line x1="18" y1="${ROW_HEIGHT/2+height-6}"
+                x2="34" y2="${ROW_HEIGHT/2+height+6}"
+                stroke="${gc}" stroke-width="2"/>
+          <line x1="34" y1="${ROW_HEIGHT/2+height-6}"
+                x2="18" y2="${ROW_HEIGHT/2+height+6}"
+                stroke="${gc}" stroke-width="2"/>
+        </svg>`;
+      }
+      html += `<div style="position:absolute;left:${left}px;top:${topY}px;">${svg}</div>`;
+
+    } else if(g.q2 !== undefined){
+      // ── PUERTAS 2 QUBITS (CX, CZ, SWAP, genéricas) ──────────────
+      const topY  = Math.min(g.q, g.q2) * ROW_HEIGHT;
+      const botQ  = Math.max(g.q, g.q2);
+      const topQ  = Math.min(g.q, g.q2);
+      const height = (botQ - topQ) * ROW_HEIGHT;
+      const gc = g.bg || '#007070';
+      let svg = '';
+
+      if(g.id === 'CX' && !g.isCZ){
+        // CNOT: control ● arriba + target ⊕ abajo
+        svg = `<svg width="48" height="${ROW_HEIGHT + height}"
+          viewBox="0 0 48 ${ROW_HEIGHT + height}">
+          <line x1="24" y1="0" x2="24" y2="${ROW_HEIGHT+height}"
+            stroke="${gc}" stroke-width="2.5"/>
+          <!-- control ● -->
+          <circle cx="24" cy="${ROW_HEIGHT/2}"
+            r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <!-- target ⊕ -->
+          <circle cx="24" cy="${ROW_HEIGHT/2+height}"
+            r="14" fill="none" stroke="${gc}" stroke-width="2.5"/>
+          <line x1="16" y1="${ROW_HEIGHT/2+height}" x2="32" y2="${ROW_HEIGHT/2+height}"
+            stroke="${gc}" stroke-width="2"/>
+          <line x1="24" y1="${ROW_HEIGHT/2+height-10}" x2="24" y2="${ROW_HEIGHT/2+height+10}"
+            stroke="${gc}" stroke-width="2"/>
+        </svg>`;
+      } else if(g.id === 'CZ' || g.isCZ){
+        // CZ: dos puntos de control ●
+        svg = `<svg width="48" height="${ROW_HEIGHT + height}"
+          viewBox="0 0 48 ${ROW_HEIGHT + height}">
+          <line x1="24" y1="0" x2="24" y2="${ROW_HEIGHT+height}"
+            stroke="${gc}" stroke-width="2.5"/>
+          <circle cx="24" cy="${ROW_HEIGHT/2}"
+            r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <circle cx="24" cy="${ROW_HEIGHT/2+height}"
+            r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+        </svg>`;
+      } else if(g.id === 'SWAP'){
+        // SWAP: dos × conectados
+        svg = `<svg width="48" height="${ROW_HEIGHT + height}"
+          viewBox="0 0 48 ${ROW_HEIGHT + height}">
+          <line x1="24" y1="0" x2="24" y2="${ROW_HEIGHT+height}"
+            stroke="${gc}" stroke-width="2.5"/>
+          <line x1="16" y1="${ROW_HEIGHT/2-6}" x2="32" y2="${ROW_HEIGHT/2+6}"
+            stroke="${gc}" stroke-width="2"/>
+          <line x1="32" y1="${ROW_HEIGHT/2-6}" x2="16" y2="${ROW_HEIGHT/2+6}"
+            stroke="${gc}" stroke-width="2"/>
+          <line x1="16" y1="${ROW_HEIGHT/2+height-6}" x2="32" y2="${ROW_HEIGHT/2+height+6}"
+            stroke="${gc}" stroke-width="2"/>
+          <line x1="32" y1="${ROW_HEIGHT/2+height-6}" x2="16" y2="${ROW_HEIGHT/2+height+6}"
+            stroke="${gc}" stroke-width="2"/>
+        </svg>`;
+      } else {
+        // Genérica controlada: ● arriba + caja abajo
+        const sym = g.sym || g.id;
+        const fs  = sym.length <= 2 ? 13 : sym.length === 3 ? 11 : 9;
+        svg = `<svg width="48" height="${ROW_HEIGHT + height}"
+          viewBox="0 0 48 ${ROW_HEIGHT + height}">
+          <line x1="24" y1="0" x2="24" y2="${ROW_HEIGHT+height}"
+            stroke="${gc}" stroke-width="2.5"/>
+          <circle cx="24" cy="${ROW_HEIGHT/2}"
+            r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <rect x="4" y="${ROW_HEIGHT/2+height-19}" width="40" height="38" rx="6"
+            fill="${gc}" stroke="rgba(255,255,255,.28)" stroke-width="1.4" fill-opacity=".85"/>
+          <rect x="6" y="${ROW_HEIGHT/2+height-17}" width="36" height="4" rx="4"
+            fill="rgba(255,255,255,.18)"/>
+          <text x="24" y="${ROW_HEIGHT/2+height+5}"
+            text-anchor="middle" font-family="JetBrains Mono,monospace"
+            font-size="${fs}" font-weight="bold" fill="white">${escH(sym)}</text>
+        </svg>`;
+      }
+      html += `<div style="position:absolute;left:${left}px;top:${topY}px;">${svg}</div>`;
+
+    } else {
+      // ── PUERTAS 1 QUBIT ─────────────────────────────────────────
+      const yPos = g.q * ROW_HEIGHT;
+      const gc   = g.bg || '#1a4a8a';
+      const sym  = (g.sym||g.id||'?');
+      const display = sym.length > 4 ? sym.slice(0,3) : sym;
+      const fs   = display.length <= 2 ? 13 : display.length === 3 ? 11 : 9;
+
+      if(g.id === 'M' || g.name === 'M'){
+        // Medidor: caja marrón con arco y aguja (igual al arquitecto)
+        html += `<div style="position:absolute;left:${left}px;top:${yPos+ROW_HEIGHT/2}px;transform:translateY(-50%);">
+          <svg width="44" height="38" viewBox="0 0 44 38">
+            <rect x="1" y="1" width="42" height="36" rx="6"
+              fill="rgba(109,76,65,.3)" stroke="#6d4c41" stroke-width="1.8"/>
+            <rect x="3" y="3" width="38" height="4" rx="4" fill="rgba(255,255,255,.12)"/>
+            <!-- arco de medición -->
+            <path d="M 10 28 A 12 12 0 0 1 34 28"
+              fill="none" stroke="#ff9580" stroke-width="1.8" stroke-linecap="round"/>
+            <!-- aguja -->
+            <line x1="22" y1="28" x2="30" y2="14"
+              stroke="#ff9580" stroke-width="1.5" stroke-linecap="round"/>
+            <!-- punto base aguja -->
+            <circle cx="22" cy="28" r="2" fill="#ff9580"/>
+          </svg>
+        </div>`;
+      } else {
+        // Caja estándar con gradiente (igual al arquitecto)
+        html += `<div style="position:absolute;left:${left}px;top:${yPos+ROW_HEIGHT/2}px;transform:translateY(-50%);">
+          <svg width="44" height="38" viewBox="0 0 44 38">
+            <defs>
+              <linearGradient id="gg${g.col}_${g.q}" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="${gc}" stop-opacity=".92"/>
+                <stop offset="100%" stop-color="${gc}" stop-opacity=".55"/>
+              </linearGradient>
+            </defs>
+            <!-- sombra -->
+            <rect x="2" y="2" width="42" height="38" rx="7"
+              fill="${gc}" opacity=".18"/>
+            <!-- caja principal -->
+            <rect x="1" y="1" width="42" height="36" rx="6"
+              fill="url(#gg${g.col}_${g.q})" stroke="rgba(255,255,255,.28)" stroke-width="1.4"/>
+            <!-- brillo superior -->
+            <rect x="3" y="3" width="38" height="4" rx="4" fill="rgba(255,255,255,.2)"/>
+            <!-- texto -->
+            <text x="22" y="${19+fs/3}" text-anchor="middle"
+              font-family="JetBrains Mono,monospace"
+              font-size="${fs}" font-weight="bold" fill="white">${escH(display)}</text>
+          </svg>
+        </div>`;
+      }
+    }
+  });
+
+  html += '</div>';
+
+  return `<div style="padding:.45rem .55rem .7rem;background:#020c18;border-top:1px solid rgba(0,136,255,.1);overflow-x:auto;">
+    <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.1rem 0 .42rem;letter-spacing:.06em;">⚛ CIRCUITO CUÁNTICO</div>
+    ${html}
   </div>`;
 }
+
 
 function buildProbsOut(probs,shots,sim){
   const entries=Object.entries(probs).sort((a,b)=>b[1]-a[1]);
@@ -1720,32 +1888,84 @@ function showUI(user){
 // ── MENSAJES DEL CORE ─────────────────────────────────────────
 window.addEventListener('message',e=>{
   const d=e.data||{};
+
+  // Usuario
   if(d.type==='QCOL_USER'||d.type==='QCOL_USER_UPDATE'){
     const role=d.user?.role||'guest';
-    if(role==='admin'||role==='founder')showUI(d.user);
-    else if(!d.user){_initialized=false;showUI(null);}
+    if(role==='admin'||role==='founder') showUI(d.user);
+    else if(!d.user){ _initialized=false; showUI(null); }
   }
-  if(d.type==='QCOL_CONFIG_UPDATED'){const url=localStorage.getItem('qcol_colab_url');if(url){engineURL=url;checkEngine();}}
-  if(d.type==='QCOL_LOAD_NB'&&d.nb){
-    const isExpo=!!d.expositionMode;
-    if(!isExpo&&!requireAuth())return;
-    const nb=d.nb;
-    document.getElementById('nb-name-inp').value=nb.title||nb.name||'Sin título';
-    if(nb.cells&&nb.cells.length>0){
-      cells=nb.cells.map(c=>({...c,id:genId(),output:'',exec_count:null,mdEdit:false,errorLine:null}));
-    } else cells=[];
+  if(d.type==='QCOL_CONFIG_UPDATED'){
+    const url=localStorage.getItem('qcol_colab_url');
+    if(url){ engineURL=url; checkEngine(); }
+  }
+
+  // Notebook desde Proyectos — soporta ambos tipos de mensaje
+  const isOpenExpo = d.type==='QCOL_OPEN_NB_EXPOSITION';
+  const isLoadNb   = (d.type==='QCOL_LOAD_NB') && d.nb;
+
+  if(isOpenExpo || isLoadNb){
+    const nb     = d.nb;
+    const isExpo = isOpenExpo || !!d.expositionMode;
+
+    if(!nb){ notify('❌ Notebook sin datos'); return; }
+    // En modo exposición cualquier usuario puede ver
+    if(!isExpo && !requireAuth()) return;
+
+    // Cargar celdas
+    document.getElementById('nb-name-inp').value = nb.title||nb.name||'Sin título';
+    cells = (nb.cells && nb.cells.length > 0)
+      ? nb.cells.map(c=>({...c, id:genId(), output:'', exec_count:null, mdEdit:false, errorLine:null}))
+      : [];
+
+    // Mostrar UI para invitados en modo expo
     if(isExpo){
-      _initialized=true;
-      curUser=curUser||{name:'Invitado',role:'guest'};
+      _initialized = true;
+      curUser = curUser || {name:'Invitado', role:'guest'};
       document.getElementById('access-denied').classList.remove('show');
-      ['topbar','secbar','main-area','statusbar'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='flex';});
+      ['topbar','secbar','main-area','statusbar'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.style.display='flex';
+      });
     }
-    renderCells();
-    if(cells[0])focusCell(cells[0].id);
+
     setView('notebook');
-    if(isExpo)activateExpositionMode();
-    else deactivateExpositionMode();
-    notify((isExpo?'👁 ':'📂 ')+'Cargado: '+(nb.title||nb.name||'Notebook'));
+
+    // Orden importante: primero establecer _expositionMode, luego renderCells
+    // para que buildCellEl genere el HTML correcto desde el primer render
+    if(isExpo){
+      // Seteamos el flag ANTES de renderizar
+      _expositionMode = true;
+      _originalCells  = JSON.parse(JSON.stringify(cells));
+      document.body.classList.add('expo-mode');
+      // Botones
+      document.getElementById('expo-badge').style.display='inline-flex';
+      ['btn-add-code','btn-add-qk','btn-add-md','btn-import',
+       'btn-download','btn-save','btn-publish','stab-2'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.style.display='none';
+      });
+      const rst=document.getElementById('btn-restore-all'); if(rst) rst.style.display='';
+      const ni=document.getElementById('nb-name-inp');
+      if(ni){ ni.readOnly=true; ni.style.opacity='.6'; }
+      // Ahora renderizamos — buildCellEl verá _expositionMode=true
+      renderCells();
+      if(cells[0]) focusCell(cells[0].id);
+      notify('👁 Modo exposición — lee el material y experimenta con el código');
+    } else {
+      // Modo normal
+      _expositionMode = false;
+      document.body.classList.remove('expo-mode');
+      document.getElementById('expo-badge').style.display='none';
+      ['btn-add-code','btn-add-qk','btn-add-md','btn-import',
+       'btn-download','btn-save','btn-publish','stab-2'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.style.display='';
+      });
+      const rst=document.getElementById('btn-restore-all'); if(rst) rst.style.display='none';
+      const ni=document.getElementById('nb-name-inp');
+      if(ni){ ni.readOnly=false; ni.style.opacity=''; }
+      renderCells();
+      if(cells[0]) focusCell(cells[0].id);
+      notify('📂 Cargado: '+(nb.title||nb.name||'Notebook'));
+    }
   }
 });
 
