@@ -846,17 +846,22 @@ function buildCircuitOut(text){
 
       if(ctrlIdxs.length > 0 && tgtIdxs.length > 0){
         // CX (CNOT): control ■ + target ⊕
-        const minQ = Math.min(...ctrlIdxs,...tgtIdxs);
-        const maxQ = Math.max(...ctrlIdxs,...tgtIdxs);
+        // IMPORTANTE: preservar quién es control y quién es target, sin importar índice
         if(ctrlIdxs.length === 2 && tgtIdxs.length === 1){
-          // Toffoli CCX
+          // Toffoli CCX: los 2 controles + 1 target, ordenados por posición
           const qs = [...ctrlIdxs,...tgtIdxs].sort((a,b)=>a-b);
           gates.push({id:'CCX', sym:'CCX', bg:'#005f6a', glow:'#005f6a',
-            q:qs[0], q2:qs[1], q3:qs[2], col:ci, type:'3q'});
+            q:qs[0], q2:qs[1], q3:qs[2],
+            ctrlQ1:ctrlIdxs[0], ctrlQ2:ctrlIdxs[1], tgtQ:tgtIdxs[0],
+            col:ci, type:'3q'});
         } else {
-          // CX normal
+          // CX normal — guardar control y target REALES (no min/max)
+          const ctrlQ = ctrlIdxs[0];
+          const tgtQ  = tgtIdxs[0];
           gates.push({id:'CX', sym:'CX', bg:'#007070', glow:'#007070',
-            q:Math.min(...ctrlIdxs), q2:Math.max(...tgtIdxs), col:ci, type:'2q'});
+            q:Math.min(ctrlQ,tgtQ), q2:Math.max(ctrlQ,tgtQ),
+            ctrlQ, tgtQ,   // ← posiciones reales del control y target
+            col:ci, type:'2q'});
         }
       } else if(ctrlIdxs.length > 0 && swapIdxs.length >= 2){
         // CSWAP (Fredkin)
@@ -869,12 +874,14 @@ function buildCircuitOut(text){
           q:swapIdxs[0], q2:swapIdxs[swapIdxs.length-1], col:ci, type:'2q'});
       } else if(ctrlIdxs.length > 0 && boxIdxs.length > 0){
         // Puerta controlada genérica (CZ, CH, CY, etc.)
-        const ctrlQ = ctrlIdxs[0];
-        const tgtQ  = boxIdxs[0];
+        const ctrlQ   = ctrlIdxs[0];
+        const tgtQ    = boxIdxs[0];
         const boxName = sorted.find(s=>s.tok.type==='box')?.tok.name || 'Z';
-        const isCZ = boxName.toUpperCase() === 'Z';
+        const isCZ    = boxName.toUpperCase() === 'Z';
         gates.push({id: isCZ?'CZ':'CX', sym:boxName, bg:gColor(boxName), glow:gColor(boxName),
-          q:Math.min(ctrlQ,tgtQ), q2:Math.max(ctrlQ,tgtQ), col:ci, type:'2q',
+          q:Math.min(ctrlQ,tgtQ), q2:Math.max(ctrlQ,tgtQ),
+          ctrlQ, tgtQ,   // ← posiciones reales
+          col:ci, type:'2q',
           isCZ: isCZ || boxName.toUpperCase() !== 'X'
         });
       } else if(measIdxs.length > 1 || (measIdxs.length > 0 && nItems > 1)){
@@ -955,127 +962,142 @@ function buildCircuitOut(text){
 
     if(g.q3 !== undefined){
       // ── PUERTAS 3 QUBITS (Toffoli CCX, Fredkin CSW) ─────────────
-      const qs = [g.q, g.q2, g.q3].sort((a,b)=>a-b);
-      const topY  = qs[0] * ROW_HEIGHT;
-      const height = (qs[2] - qs[0]) * ROW_HEIGHT;
-      const gc = g.bg || '#005f6a';
+      const qs    = [g.q, g.q2, g.q3].sort((a,b)=>a-b);
+      const topQ  = qs[0];
+      const topY  = topQ * ROW_HEIGHT;
+      const svgH  = (qs[2]-qs[0]) * ROW_HEIGHT + ROW_HEIGHT;
+      const gc    = g.bg || '#005f6a';
+      // Convertir qubit absoluto → Y en el SVG
+      const qY = q => (q - topQ) * ROW_HEIGHT + ROW_HEIGHT/2;
       let svg = '';
 
       if(g.id === 'CCX'){
-        // Toffoli: 2 controles (●) + 1 target (⊕ con cruz)
-        svg = `<svg width="52" height="${ROW_HEIGHT + height}"
-          viewBox="0 0 52 ${ROW_HEIGHT + height}">
-          <!-- línea vertical central -->
-          <line x1="26" y1="0" x2="26" y2="${ROW_HEIGHT + height}"
+        // ── TOFFOLI ── 2 controles ● + 1 target ⊕
+        // Usar ctrlQ1, ctrlQ2, tgtQ si están disponibles; si no, asumir orden natural
+        const ctrl1 = g.ctrlQ1 !== undefined ? g.ctrlQ1 : qs[0];
+        const ctrl2 = g.ctrlQ2 !== undefined ? g.ctrlQ2 : qs[1];
+        const tgt   = g.tgtQ   !== undefined ? g.tgtQ   : qs[2];
+        svg = `<svg width="52" height="${svgH}" viewBox="0 0 52 ${svgH}">
+          <!-- línea vertical de extremo a extremo -->
+          <line x1="26" y1="${qY(qs[0])}" x2="26" y2="${qY(qs[2])}"
             stroke="${gc}" stroke-width="2.5"/>
-          <!-- control 1 (qubit más arriba) -->
-          <circle cx="26" cy="${ROW_HEIGHT/2}"
+          <!-- control 1 ● -->
+          <circle cx="26" cy="${qY(ctrl1)}"
             r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-          <!-- control 2 (qubit intermedio) -->
-          <circle cx="26" cy="${ROW_HEIGHT/2 + (qs[1]-qs[0])*ROW_HEIGHT}"
+          <!-- control 2 ● -->
+          <circle cx="26" cy="${qY(ctrl2)}"
             r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-          <!-- target ⊕ (qubit más abajo) -->
-          <circle cx="26" cy="${ROW_HEIGHT/2 + height}"
+          <!-- target ⊕ (círculo vacío + cruz) -->
+          <circle cx="26" cy="${qY(tgt)}"
             r="14" fill="none" stroke="${gc}" stroke-width="2.5"/>
-          <line x1="18" y1="${ROW_HEIGHT/2+height}" x2="34" y2="${ROW_HEIGHT/2+height}"
+          <line x1="18" y1="${qY(tgt)}" x2="34" y2="${qY(tgt)}"
             stroke="${gc}" stroke-width="2"/>
-          <line x1="26" y1="${ROW_HEIGHT/2+height-10}" x2="26" y2="${ROW_HEIGHT/2+height+10}"
+          <line x1="26" y1="${qY(tgt)-10}" x2="26" y2="${qY(tgt)+10}"
             stroke="${gc}" stroke-width="2"/>
         </svg>`;
       } else {
-        // CSW Fredkin: 1 control (●) + 2 swap (×)
-        svg = `<svg width="52" height="${ROW_HEIGHT + height}"
-          viewBox="0 0 52 ${ROW_HEIGHT + height}">
-          <line x1="26" y1="0" x2="26" y2="${ROW_HEIGHT + height}"
+        // ── FREDKIN (CSW) ── 1 control ● + 2 swap ×
+        const ctrl  = g.ctrlQ1 !== undefined ? g.ctrlQ1 : qs[0];
+        const swap1 = qs.find(q=>q!==ctrl) || qs[1];
+        const swap2 = qs.filter(q=>q!==ctrl).pop() || qs[2];
+        svg = `<svg width="52" height="${svgH}" viewBox="0 0 52 ${svgH}">
+          <line x1="26" y1="${qY(qs[0])}" x2="26" y2="${qY(qs[2])}"
             stroke="${gc}" stroke-width="2.5"/>
           <!-- control ● -->
-          <circle cx="26" cy="${ROW_HEIGHT/2}"
+          <circle cx="26" cy="${qY(ctrl)}"
             r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-          <!-- swap × arriba -->
-          <line x1="18" y1="${ROW_HEIGHT/2+(qs[1]-qs[0])*ROW_HEIGHT-6}"
-                x2="34" y2="${ROW_HEIGHT/2+(qs[1]-qs[0])*ROW_HEIGHT+6}"
-                stroke="${gc}" stroke-width="2"/>
-          <line x1="34" y1="${ROW_HEIGHT/2+(qs[1]-qs[0])*ROW_HEIGHT-6}"
-                x2="18" y2="${ROW_HEIGHT/2+(qs[1]-qs[0])*ROW_HEIGHT+6}"
-                stroke="${gc}" stroke-width="2"/>
-          <!-- swap × abajo -->
-          <line x1="18" y1="${ROW_HEIGHT/2+height-6}"
-                x2="34" y2="${ROW_HEIGHT/2+height+6}"
-                stroke="${gc}" stroke-width="2"/>
-          <line x1="34" y1="${ROW_HEIGHT/2+height-6}"
-                x2="18" y2="${ROW_HEIGHT/2+height+6}"
-                stroke="${gc}" stroke-width="2"/>
+          <!-- swap × primero -->
+          <line x1="18" y1="${qY(swap1)-8}" x2="34" y2="${qY(swap1)+8}"
+            stroke="${gc}" stroke-width="2.2"/>
+          <line x1="34" y1="${qY(swap1)-8}" x2="18" y2="${qY(swap1)+8}"
+            stroke="${gc}" stroke-width="2.2"/>
+          <!-- swap × segundo -->
+          <line x1="18" y1="${qY(swap2)-8}" x2="34" y2="${qY(swap2)+8}"
+            stroke="${gc}" stroke-width="2.2"/>
+          <line x1="34" y1="${qY(swap2)-8}" x2="18" y2="${qY(swap2)+8}"
+            stroke="${gc}" stroke-width="2.2"/>
         </svg>`;
       }
       html += `<div style="position:absolute;left:${left}px;top:${topY}px;">${svg}</div>`;
 
     } else if(g.q2 !== undefined){
       // ── PUERTAS 2 QUBITS (CX, CZ, SWAP, genéricas) ──────────────
-      const topY  = Math.min(g.q, g.q2) * ROW_HEIGHT;
-      const botQ  = Math.max(g.q, g.q2);
-      const topQ  = Math.min(g.q, g.q2);
+      // g.q  = qubit de menor índice (topQ)
+      // g.q2 = qubit de mayor índice (botQ)
+      // g.ctrlQ = qubit REAL del control (puede ser cualquiera de los dos)
+      // g.tgtQ  = qubit REAL del target
+      const topQ   = Math.min(g.q, g.q2);
+      const botQ   = Math.max(g.q, g.q2);
+      const topY   = topQ * ROW_HEIGHT;
       const height = (botQ - topQ) * ROW_HEIGHT;
-      const gc = g.bg || '#007070';
+      const gc     = g.bg || '#007070';
+
+      // Calcular Y dentro del SVG para control y target
+      // SVG empieza en topQ — posición relativa = (qubit - topQ) * ROW_HEIGHT + ROW_HEIGHT/2
+      const ctrlQ  = g.ctrlQ !== undefined ? g.ctrlQ : topQ;  // default: ctrl arriba
+      const tgtQ   = g.tgtQ  !== undefined ? g.tgtQ  : botQ;  // default: tgt abajo
+      const ctrlY  = (ctrlQ - topQ) * ROW_HEIGHT + ROW_HEIGHT/2;
+      const tgtY   = (tgtQ  - topQ) * ROW_HEIGHT + ROW_HEIGHT/2;
+      const svgH   = ROW_HEIGHT + height;
+
       let svg = '';
 
       if(g.id === 'CX' && !g.isCZ){
-        // CNOT: control ● arriba + target ⊕ abajo
-        svg = `<svg width="48" height="${ROW_HEIGHT + height}"
-          viewBox="0 0 48 ${ROW_HEIGHT + height}">
-          <line x1="24" y1="0" x2="24" y2="${ROW_HEIGHT+height}"
+        // ── CNOT ── control ● en ctrlY, target ⊕ en tgtY
+        svg = `<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
+          <!-- línea vertical entre control y target -->
+          <line x1="24" y1="${Math.min(ctrlY,tgtY)}" x2="24" y2="${Math.max(ctrlY,tgtY)}"
             stroke="${gc}" stroke-width="2.5"/>
           <!-- control ● -->
-          <circle cx="24" cy="${ROW_HEIGHT/2}"
+          <circle cx="24" cy="${ctrlY}"
             r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-          <!-- target ⊕ -->
-          <circle cx="24" cy="${ROW_HEIGHT/2+height}"
+          <!-- target ⊕ (círculo vacío + cruz) -->
+          <circle cx="24" cy="${tgtY}"
             r="14" fill="none" stroke="${gc}" stroke-width="2.5"/>
-          <line x1="16" y1="${ROW_HEIGHT/2+height}" x2="32" y2="${ROW_HEIGHT/2+height}"
-            stroke="${gc}" stroke-width="2"/>
-          <line x1="24" y1="${ROW_HEIGHT/2+height-10}" x2="24" y2="${ROW_HEIGHT/2+height+10}"
-            stroke="${gc}" stroke-width="2"/>
+          <line x1="16" y1="${tgtY}" x2="32" y2="${tgtY}" stroke="${gc}" stroke-width="2"/>
+          <line x1="24" y1="${tgtY-10}" x2="24" y2="${tgtY+10}" stroke="${gc}" stroke-width="2"/>
         </svg>`;
+
       } else if(g.id === 'CZ' || g.isCZ){
-        // CZ: dos puntos de control ●
-        svg = `<svg width="48" height="${ROW_HEIGHT + height}"
-          viewBox="0 0 48 ${ROW_HEIGHT + height}">
-          <line x1="24" y1="0" x2="24" y2="${ROW_HEIGHT+height}"
+        // ── CZ ── dos puntos ● en ambos qubits (simérico)
+        svg = `<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
+          <line x1="24" y1="${ctrlY}" x2="24" y2="${tgtY}"
             stroke="${gc}" stroke-width="2.5"/>
-          <circle cx="24" cy="${ROW_HEIGHT/2}"
+          <circle cx="24" cy="${ctrlY}"
             r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-          <circle cx="24" cy="${ROW_HEIGHT/2+height}"
+          <circle cx="24" cy="${tgtY}"
             r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
         </svg>`;
+
       } else if(g.id === 'SWAP'){
-        // SWAP: dos × conectados
-        svg = `<svg width="48" height="${ROW_HEIGHT + height}"
-          viewBox="0 0 48 ${ROW_HEIGHT + height}">
-          <line x1="24" y1="0" x2="24" y2="${ROW_HEIGHT+height}"
+        // ── SWAP ── dos × en ctrlY y tgtY conectados
+        svg = `<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
+          <line x1="24" y1="${ctrlY}" x2="24" y2="${tgtY}"
             stroke="${gc}" stroke-width="2.5"/>
-          <line x1="16" y1="${ROW_HEIGHT/2-6}" x2="32" y2="${ROW_HEIGHT/2+6}"
-            stroke="${gc}" stroke-width="2"/>
-          <line x1="32" y1="${ROW_HEIGHT/2-6}" x2="16" y2="${ROW_HEIGHT/2+6}"
-            stroke="${gc}" stroke-width="2"/>
-          <line x1="16" y1="${ROW_HEIGHT/2+height-6}" x2="32" y2="${ROW_HEIGHT/2+height+6}"
-            stroke="${gc}" stroke-width="2"/>
-          <line x1="32" y1="${ROW_HEIGHT/2+height-6}" x2="16" y2="${ROW_HEIGHT/2+height+6}"
-            stroke="${gc}" stroke-width="2"/>
+          <!-- × arriba -->
+          <line x1="16" y1="${ctrlY-8}" x2="32" y2="${ctrlY+8}" stroke="${gc}" stroke-width="2.2"/>
+          <line x1="32" y1="${ctrlY-8}" x2="16" y2="${ctrlY+8}" stroke="${gc}" stroke-width="2.2"/>
+          <!-- × abajo -->
+          <line x1="16" y1="${tgtY-8}"  x2="32" y2="${tgtY+8}"  stroke="${gc}" stroke-width="2.2"/>
+          <line x1="32" y1="${tgtY-8}"  x2="16" y2="${tgtY+8}"  stroke="${gc}" stroke-width="2.2"/>
         </svg>`;
+
       } else {
-        // Genérica controlada: ● arriba + caja abajo
-        const sym = g.sym || g.id;
-        const fs  = sym.length <= 2 ? 13 : sym.length === 3 ? 11 : 9;
-        svg = `<svg width="48" height="${ROW_HEIGHT + height}"
-          viewBox="0 0 48 ${ROW_HEIGHT + height}">
-          <line x1="24" y1="0" x2="24" y2="${ROW_HEIGHT+height}"
+        // ── Puerta controlada genérica ── ● control + caja target
+        const sym   = g.sym || g.id;
+        const fs    = sym.length <= 2 ? 13 : sym.length === 3 ? 11 : 9;
+        const boxY  = tgtY - 19;   // top de la caja centrada en tgtY
+        svg = `<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
+          <line x1="24" y1="${Math.min(ctrlY,tgtY)}" x2="24" y2="${Math.max(ctrlY,tgtY)}"
             stroke="${gc}" stroke-width="2.5"/>
-          <circle cx="24" cy="${ROW_HEIGHT/2}"
+          <!-- control ● -->
+          <circle cx="24" cy="${ctrlY}"
             r="8" fill="${gc}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-          <rect x="4" y="${ROW_HEIGHT/2+height-19}" width="40" height="38" rx="6"
+          <!-- target: caja con gradiente -->
+          <rect x="4" y="${boxY}" width="40" height="38" rx="6"
             fill="${gc}" stroke="rgba(255,255,255,.28)" stroke-width="1.4" fill-opacity=".85"/>
-          <rect x="6" y="${ROW_HEIGHT/2+height-17}" width="36" height="4" rx="4"
-            fill="rgba(255,255,255,.18)"/>
-          <text x="24" y="${ROW_HEIGHT/2+height+5}"
+          <rect x="6" y="${boxY+2}" width="36" height="4" rx="4" fill="rgba(255,255,255,.18)"/>
+          <text x="24" y="${tgtY+fs/3}"
             text-anchor="middle" font-family="JetBrains Mono,monospace"
             font-size="${fs}" font-weight="bold" fill="white">${escH(sym)}</text>
         </svg>`;
