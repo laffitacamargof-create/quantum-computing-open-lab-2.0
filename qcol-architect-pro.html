@@ -709,12 +709,14 @@ function buildCircuitOut(text){
   );
 
   if(wireLines.length === 0){
+    // Fallback ASCII coloreado
     let col = escH(text);
     col = col.replace(/(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/g,
       '<s style="color:#bd93f9;font-weight:700;font-style:normal">$1</s>:');
     col = col.replace(/┤\s*([A-Za-z0-9√Rπ/.+\-]+(?:\([^)]*\))?)\s*[├┤]/g,
       (m,g)=>`┤<s style="color:#00aaff;font-weight:700;font-style:normal"> ${g} </s>┤`);
-    col = col.replace(/─(M)─/g,'─<s style="color:#ff9580;font-weight:700;font-style:normal">M</s>─');
+    col = col.replace(/─(M)─/g,
+      '─<s style="color:#ff9580;font-weight:700;font-style:normal">M</s>─');
     return `<div style="padding:.4rem .55rem;background:#020c18;border-top:1px solid rgba(0,136,255,.1);">
       <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.1rem 0 .3rem;">⚛ DIAGRAMA DEL CIRCUITO</div>
       <div class="out-circuit-text">${col}</div>
@@ -722,189 +724,207 @@ function buildCircuitOut(text){
   }
 
   const nQ = wireLines.length;
-  const wireLabels = wireLines.map(l=>
+  const wireLabels = wireLines.map(l =>
     (l.match(/^\s*(q_?\d+|q\[\d+\]|qr\[\d+\])/)||['','?'])[1]
   );
-  const wireContents = wireLines.map(l=>{
+  const wireContents = wireLines.map(l => {
     const m = l.match(/^\s*(?:q_?\d+|q\[\d+\]|qr\[\d+\])\s*:\s*(.*)/);
     return m ? m[1] : '';
   });
 
-  // ── TOKENIZAR ────────────────────────────────────────────────
-  // Caracteres EXACTOS que usa Qiskit:
-  //   ■  U+25A0  = control (CNOT ctrl, CZ ambos, CCX ctrl, CSWAP ctrl)
-  //   ⊕  U+2295  = target CNOT/CCX
-  //   ╳  U+2573  = target SWAP/CSWAP  ← ESTE ES EL BUG: no era × U+00D7
-  //   ┤M├         = medidor
-  //   ┤NAME├      = puerta de 1 qubit
+  // ── PASO 1: TOKENIZAR cada wire ──────────────────────────────
+  // Caracteres exactos de Qiskit:
+  //   ■ U+25A0  = control (CX/CZ/CCX/CSWAP)
+  //   ⊕ U+2295  = target CNOT/CCX
+  //   ╳ U+2573  = target SWAP/CSWAP  (NO confundir con × U+00D7)
+  //   ┤NAME├    = puerta de 1 qubit o target genérico
 
-  function tokenize(wire){
+  function tokenize(wire) {
     const toks = [];
-    // Orden: primero cajas (más largas), luego símbolos sueltos
-    const RE = /┤\s*((?:[^┤├\n])*?)\s*(?:├|┤)|(■|█|●)|(⊕)|(╳|×)/g;
+    // Cajas primero (pueden contener cualquier texto)
+    const BOX = /┤\s*((?:[^┤├\n])*?)\s*(?:├|┤)/g;
     let m;
-    while((m = RE.exec(wire)) !== null){
+    while((m = BOX.exec(wire)) !== null) {
+      const name = m[1].trim() || '?';
       const mid = m.index + Math.floor(m[0].length / 2);
-      if(m[1] !== undefined){
-        const name = m[1].trim() || '?';
-        // Detectar si la "caja" es en realidad solo una letra de control/target
-        toks.push({type:'box', name, mid, start:m.index, end:m.index+m[0].length});
-      } else if(m[2]){
-        toks.push({type:'ctrl', name:'■', mid:m.index, start:m.index, end:m.index+1});
-      } else if(m[3]){
-        toks.push({type:'tgt', name:'⊕', mid:m.index, start:m.index, end:m.index+1});
-      } else if(m[4]){
-        // ╳ U+2573 = SWAP target (Qiskit usa este, NO ×)
-        toks.push({type:'swap', name:'╳', mid:m.index, start:m.index, end:m.index+1});
-      }
+      toks.push({type:'box', name, mid, start:m.index, end:m.index+m[0].length});
     }
-    // Medidor M aislado (sin caja)
-    const MEAS = /(?:─)(M)(?:─)/g;
-    while((m = MEAS.exec(wire)) !== null){
-      const pos = m.index + 1; // posición de la M
-      if(!toks.some(t => Math.abs(t.mid - pos) < 3))
+    // Símbolos de 1 carácter (posición exacta, muy importante)
+    const SYM = /(■|█|●)|(⊕)|(╳|×)/g;
+    while((m = SYM.exec(wire)) !== null) {
+      // No añadir si ya hay un box que ocupa esa posición
+      const pos = m.index;
+      if(toks.some(t => t.type==='box' && pos >= t.start && pos < t.end)) continue;
+      if(m[1])      toks.push({type:'ctrl', name:'■', mid:pos, start:pos, end:pos+1});
+      else if(m[2]) toks.push({type:'tgt',  name:'⊕', mid:pos, start:pos, end:pos+1});
+      else if(m[3]) toks.push({type:'swap', name:'╳', mid:pos, start:pos, end:pos+1});
+    }
+    // Medidor M aislado (─M─)
+    const MEAS = /(?<=─)(M)(?=─)/g;
+    while((m = MEAS.exec(wire)) !== null) {
+      const pos = m.index;
+      if(!toks.some(t => Math.abs(t.mid - pos) < 2))
         toks.push({type:'meas', name:'M', mid:pos, start:pos, end:pos+1});
     }
-    toks.sort((a,b)=>a.mid-b.mid);
-    return toks;
+    return toks.sort((a,b) => a.mid - b.mid);
   }
 
-  const wireToks = wireContents.map(w=>tokenize(w));
+  // ── PASO 2: AGRUPAR EN COLUMNAS — posición exacta ────────────
+  // Bug anterior: usar avgMid móvil agrupaba tokens incorrectamente.
+  // Solución: tokens de 1 char (■,⊕,╳) agrupan SOLO por posición EXACTA.
+  //           tokens de caja agrupan con tolerancia ±3 chars (ancho variable).
 
-  // ── AGRUPAR EN COLUMNAS ──────────────────────────────────────
-  // Tolerancia amplia para capturar tokens desalineados por relleno de Qiskit
-  const TOLS = 8;
-  const columns = [];
-  wireToks.forEach((toks,qi)=>{
-    toks.forEach(tok=>{
-      let placed = false;
-      for(const col of columns){
-        const avgMid = col.reduce((s,c)=>s+c.tok.mid,0)/col.length;
-        if(Math.abs(tok.mid-avgMid) <= TOLS){
-          if(!col.find(c=>c.qi===qi)){
-            col.push({qi, tok});
-            placed = true;
-          }
-          break;
-        }
+  // Recopilar todos los tokens con su qubit
+  const allToks = [];
+  wireContents.forEach((w, qi) => {
+    tokenize(w).forEach(tok => allToks.push({qi, ...tok}));
+  });
+  allToks.sort((a,b) => a.mid - b.mid || a.qi - b.qi);
+
+  // Agrupar por posición de carácter
+  // clave = posición normalizada (exacta para sym, /4*4 para box)
+  const colMap = new Map();
+  allToks.forEach(tok => {
+    // Calcular clave del grupo
+    let key;
+    if(tok.type === 'box') {
+      // Boxes: agrupar con tolerancia ±2 chars
+      key = Math.round(tok.mid / 4) * 4;
+    } else {
+      // Símbolos: posición exacta
+      key = tok.mid;
+    }
+    // Buscar grupo cercano ya existente (para boxes con keys similares)
+    let bestKey = key;
+    let bestDist = Infinity;
+    for(const k of colMap.keys()) {
+      const dist = Math.abs(k - key);
+      const tol = (tok.type === 'box') ? 4 : 1;
+      if(dist <= tol && dist < bestDist) {
+        bestDist = dist;
+        bestKey = k;
       }
-      if(!placed) columns.push([{qi, tok}]);
-    });
-  });
-  columns.sort((a,b)=>{
-    const ma=a.reduce((s,c)=>s+c.tok.mid,0)/a.length;
-    const mb=b.reduce((s,c)=>s+c.tok.mid,0)/b.length;
-    return ma-mb;
+    }
+    if(!colMap.has(bestKey)) colMap.set(bestKey, []);
+    const col = colMap.get(bestKey);
+    // Solo añadir si este qubit no está ya en la columna
+    if(!col.find(c => c.qi === tok.qi)) col.push(tok);
   });
 
-  // ── IDENTIFICAR GATES ────────────────────────────────────────
-  const COLORS={
-    H:'#1a5fb4',X:'#c01c28',Y:'#7a3e99',Z:'#1c71d8',
-    S:'#c64600',T:'#26a269',SX:'#c01c28','√X':'#c01c28',
-    RX:'#0077c2',RY:'#005f6a',RZ:'#5e35b1',P:'#5e35b1',
-    U:'#6a1b9a',U1:'#6a1b9a',U2:'#6a1b9a',U3:'#6a1b9a',
-    CX:'#007070',CZ:'#00695c',SWAP:'#1565c0',
-    CCX:'#005f6a',CSW:'#283593',M:'#6d4c41',MEAS:'#6d4c41',
+  // Convertir a array ordenado por posición
+  const columns = [...colMap.entries()]
+    .sort((a,b) => a[0] - b[0])
+    .map(([key, items]) => items.slice().sort((a,b) => a.qi - b.qi));
+
+  // ── PASO 3: IDENTIFICAR TIPO DE PUERTA ───────────────────────
+  const COLORS = {
+    H:'#1a5fb4', X:'#c01c28', Y:'#7a3e99', Z:'#1c71d8',
+    S:'#c64600', T:'#26a269', SX:'#c01c28', '√X':'#c01c28',
+    RX:'#0077c2', RY:'#005f6a', RZ:'#5e35b1', P:'#5e35b1',
+    U:'#6a1b9a', CX:'#007070', CZ:'#00695c', SWAP:'#1565c0',
+    CCX:'#005f6a', CSW:'#283593', M:'#6d4c41', MEAS:'#6d4c41',
     DEFAULT:'#1a4a8a'
   };
-  const gc = name=>{
-    const k=name.replace(/\s*\(.*\)/,'').trim().toUpperCase();
-    return COLORS[k]||COLORS.DEFAULT;
-  };
+  const gc = n => COLORS[n.replace(/\s*\(.*\)/,'').trim().toUpperCase()] || COLORS.DEFAULT;
 
-  const gates=[];
+  const gates = [];
 
-  columns.forEach((col,ci)=>{
-    const sorted=col.slice().sort((a,b)=>a.qi-b.qi);
+  columns.forEach((col, ci) => {
+    const ctrlItems = col.filter(s => s.type==='ctrl');
+    const tgtItems  = col.filter(s => s.type==='tgt');
+    const swapItems = col.filter(s => s.type==='swap');
+    const boxItems  = col.filter(s => s.type==='box');
+    const measItems = col.filter(s => s.type==='meas');
 
-    const ctrlItems=sorted.filter(s=>s.tok.type==='ctrl');
-    const tgtItems =sorted.filter(s=>s.tok.type==='tgt');
-    const swapItems=sorted.filter(s=>s.tok.type==='swap');
-    const boxItems =sorted.filter(s=>s.tok.type==='box');
-    const measItems=sorted.filter(s=>s.tok.type==='meas');
+    const ctrlQs = ctrlItems.map(s=>s.qi);
+    const tgtQs  = tgtItems.map(s=>s.qi);
+    const swapQs = swapItems.map(s=>s.qi);
+    const boxQs  = boxItems.map(s=>s.qi);
+    const xBoxQs = boxItems.filter(s=>s.name.toUpperCase()==='X').map(s=>s.qi);
+    const mBoxQs = boxItems.filter(s=>['M','MEAS'].includes(s.name.toUpperCase())).map(s=>s.qi);
 
-    const ctrlQs=ctrlItems.map(s=>s.qi);
-    const tgtQs =tgtItems.map(s=>s.qi);
-    const swapQs=swapItems.map(s=>s.qi);
-    const boxQs =boxItems.map(s=>s.qi);
+    const push1q = s => {
+      const name = s.name||s.id||'?';
+      const isMeas = s.type==='meas'||['M','MEAS'].includes(name.toUpperCase());
+      const id = isMeas ? 'M' : name.toUpperCase().replace(/\s*\(.*\)/,'').replace(/[^A-Z0-9√]/g,'');
+      gates.push({id, sym:name.length>4?name.slice(0,3):name,
+        bg:gc(name), glow:gc(name), q:s.qi, col:ci, type:'1q', name});
+    };
 
-    // X boxes: target de CNOT en formato moderno
-    const xBoxItems=boxItems.filter(s=>s.tok.name.toUpperCase()==='X');
-    const xBoxQs=xBoxItems.map(s=>s.qi);
-    const mBoxItems=boxItems.filter(s=>
-      s.tok.name.toUpperCase()==='M'||s.tok.name.toUpperCase()==='MEAS'
-    );
+    // ── 1 token → puerta de 1 qubit ──────────────────────────
+    if(col.length === 1) { push1q(col[0]); return; }
 
-    // ── 1 token: puerta de 1 qubit ─────────────────────────────
-    if(sorted.length===1){
-      const {qi,tok}=sorted[0];
-      const name=tok.name;
-      const isMeas=tok.type==='meas'||name.toUpperCase()==='M'||name.toUpperCase()==='MEAS';
-      const id=isMeas?'M':name.toUpperCase().replace(/\s*\(.*\)/,'').replace(/[^A-Z0-9√]/g,'');
-      gates.push({id,sym:name.length>4?name.slice(0,3):name,
-        bg:gc(name),glow:gc(name),q:qi,col:ci,type:'1q',name});
+    // ── Múltiples medidores → individuales ───────────────────
+    if((measItems.length > 0 || mBoxQs.length > 0) && ctrlQs.length === 0) {
+      [...measItems, ...boxItems.filter(s=>['M','MEAS'].includes(s.name.toUpperCase()))]
+        .forEach(s => gates.push({id:'M',sym:'M',bg:'#6d4c41',glow:'#6d4c41',q:s.qi,col:ci,type:'1q'}));
+      boxItems.filter(s=>!['M','MEAS'].includes(s.name.toUpperCase()))
+        .forEach(s => push1q(s));
       return;
     }
 
-    // ── Medidores múltiples → individuales ─────────────────────
-    if((measItems.length>0||mBoxItems.length>0) && ctrlQs.length===0){
-      [...measItems,...mBoxItems].forEach(s=>{
-        gates.push({id:'M',sym:'M',bg:'#6d4c41',glow:'#6d4c41',q:s.qi,col:ci,type:'1q'});
-      });
-      boxItems.filter(s=>
-        s.tok.name.toUpperCase()!=='M'&&s.tok.name.toUpperCase()!=='MEAS'
-      ).forEach(s=>{
-        const name=s.tok.name;
-        gates.push({id:name.toUpperCase().replace(/\s*\(.*\)/,''),
-          sym:name.length>4?name.slice(0,3):name,
-          bg:gc(name),glow:gc(name),q:s.qi,col:ci,type:'1q',name});
-      });
+    // ══ TABLA DE REGLAS (Qiskit text drawer) ══════════════════
+    // ■ + ⊕               → CX (CNOT)
+    // ■ + ■               → CZ
+    // ╳ + ╳               → SWAP
+    // ■ + ■ + ⊕           → CCX (Toffoli)
+    // ■ + ╳ + ╳           → CSW (Fredkin/CSWAP)
+    // ■ + ┤X├             → CX moderno (Qiskit ≥0.20)
+    // ■ + ■ + ┤X├         → CCX moderno
+    // ■ + ┤X├ + ┤X├       → CSW moderno
+    // ┤X├ + ┤X├ (sin ■)   → SWAP moderno
+    // ■ + ┤Z├             → CZ (genérico)
+    // ■ + ┤OTRO├          → Puerta controlada genérica
+
+    // CX clásico: ■ + ⊕
+    if(ctrlQs.length===1 && tgtQs.length===1 && swapQs.length===0) {
+      const [cq,tq]=[ctrlQs[0],tgtQs[0]];
+      gates.push({id:'CX',sym:'CX',bg:'#007070',glow:'#007070',
+        q:Math.min(cq,tq),q2:Math.max(cq,tq),ctrlQ:cq,tgtQ:tq,col:ci,type:'2q'});
       return;
     }
 
-    // ── CASO 1: ctrl ■ + ⊕ target clásico ─────────────────────
-    if(ctrlQs.length>0 && tgtQs.length>0){
-      if(ctrlQs.length===2 && tgtQs.length===1){
-        // Toffoli CCX
-        const qs=[...ctrlQs,...tgtQs].sort((a,b)=>a-b);
-        gates.push({id:'CCX',sym:'CCX',bg:'#005f6a',glow:'#005f6a',
-          q:qs[0],q2:qs[1],q3:qs[2],
-          ctrlQ1:ctrlQs[0],ctrlQ2:ctrlQs[1],tgtQ:tgtQs[0],
-          col:ci,type:'3q'});
-      } else {
-        const ctrlQ=ctrlQs[0],tgtQ=tgtQs[0];
-        gates.push({id:'CX',sym:'CX',bg:'#007070',glow:'#007070',
-          q:Math.min(ctrlQ,tgtQ),q2:Math.max(ctrlQ,tgtQ),
-          ctrlQ,tgtQ,col:ci,type:'2q'});
-      }
+    // CCX clásico: ■ + ■ + ⊕
+    if(ctrlQs.length===2 && tgtQs.length===1 && swapQs.length===0) {
+      const qs=[...ctrlQs,...tgtQs].sort((a,b)=>a-b);
+      gates.push({id:'CCX',sym:'CCX',bg:'#005f6a',glow:'#005f6a',
+        q:qs[0],q2:qs[1],q3:qs[2],
+        ctrlQ1:ctrlQs[0],ctrlQ2:ctrlQs[1],tgtQ:tgtQs[0],
+        col:ci,type:'3q'});
       return;
     }
 
-    // ── CASO 2: ╳ SWAP targets ─────────────────────────────────
-    // Qiskit usa ╳ (U+2573) para SWAP y CSWAP targets
-    if(swapQs.length>=2){
-      if(ctrlQs.length>0){
-        // CSWAP (Fredkin): ■ + ╳ + ╳
-        const qs=[...ctrlQs,...swapQs].sort((a,b)=>a-b);
-        const ctrl=ctrlQs[0];
-        const [sw1,sw2]=swapQs.slice().sort((a,b)=>a-b);
-        gates.push({id:'CSW',sym:'CSW',bg:'#283593',glow:'#283593',
-          q:qs[0],q2:qs[1],q3:qs[2],
-          ctrlQ1:ctrl,swapQ1:sw1,swapQ2:sw2,
-          col:ci,type:'3q'});
-      } else {
-        // SWAP: ╳ + ╳
-        const [q1,q2]=swapQs.slice().sort((a,b)=>a-b);
-        gates.push({id:'SWAP',sym:'SW',bg:'#1565c0',glow:'#1565c0',
-          q:q1,q2,ctrlQ:q1,tgtQ:q2,col:ci,type:'2q'});
-      }
+    // CZ clásico: ■ + ■ (exactamente 2, sin otros)
+    if(ctrlQs.length===2 && tgtQs.length===0 && swapQs.length===0 && boxQs.length===0) {
+      const [cq,tq]=ctrlQs.slice().sort((a,b)=>a-b);
+      gates.push({id:'CZ',sym:'CZ',bg:'#00695c',glow:'#00695c',
+        q:cq,q2:tq,ctrlQ:cq,tgtQ:tq,col:ci,type:'2q'});
       return;
     }
 
-    // ── CASO 3: ctrl + box(es) ────────────────────────────────
-    if(ctrlQs.length>0 && boxQs.length>0){
-      // CCX formato moderno: ■■ + ┤X├
-      if(ctrlQs.length===2 && xBoxQs.length===1){
+    // SWAP clásico: ╳ + ╳ (sin control)
+    if(swapQs.length>=2 && ctrlQs.length===0) {
+      const [q1,q2]=swapQs.slice().sort((a,b)=>a-b);
+      gates.push({id:'SWAP',sym:'SW',bg:'#1565c0',glow:'#1565c0',
+        q:q1,q2,ctrlQ:q1,tgtQ:q2,col:ci,type:'2q'});
+      return;
+    }
+
+    // CSWAP clásico: ■ + ╳ + ╳
+    if(ctrlQs.length===1 && swapQs.length>=2) {
+      const qs=[...ctrlQs,...swapQs].sort((a,b)=>a-b);
+      const [sw1,sw2]=swapQs.slice().sort((a,b)=>a-b);
+      gates.push({id:'CSW',sym:'CSW',bg:'#283593',glow:'#283593',
+        q:qs[0],q2:qs[1],q3:qs[2],
+        ctrlQ1:ctrlQs[0],swapQ1:sw1,swapQ2:sw2,
+        col:ci,type:'3q'});
+      return;
+    }
+
+    // Formatos modernos (■ + ┤X├ etc.)
+    if(ctrlQs.length > 0 && boxQs.length > 0) {
+      // CCX moderno: ■ + ■ + ┤X├
+      if(ctrlQs.length===2 && xBoxQs.length===1) {
         const qs=[...ctrlQs,...xBoxQs].sort((a,b)=>a-b);
         gates.push({id:'CCX',sym:'CCX',bg:'#005f6a',glow:'#005f6a',
           q:qs[0],q2:qs[1],q3:qs[2],
@@ -912,8 +932,8 @@ function buildCircuitOut(text){
           col:ci,type:'3q'});
         return;
       }
-      // CSWAP formato moderno: ■ + ┤X├ + ┤X├
-      if(ctrlQs.length===1 && xBoxQs.length===2){
+      // CSW moderno: ■ + ┤X├ + ┤X├
+      if(ctrlQs.length===1 && xBoxQs.length===2) {
         const qs=[...ctrlQs,...xBoxQs].sort((a,b)=>a-b);
         const [sw1,sw2]=xBoxQs.slice().sort((a,b)=>a-b);
         gates.push({id:'CSW',sym:'CSW',bg:'#283593',glow:'#283593',
@@ -922,103 +942,75 @@ function buildCircuitOut(text){
           col:ci,type:'3q'});
         return;
       }
-      // CX formato moderno: ■ + ┤X├
-      if(ctrlQs.length===1 && xBoxQs.length===1){
-        const ctrlQ=ctrlQs[0],tgtQ=xBoxQs[0];
+      // CX moderno: ■ + ┤X├
+      if(ctrlQs.length===1 && xBoxQs.length===1) {
+        const [cq,tq]=[ctrlQs[0],xBoxQs[0]];
         gates.push({id:'CX',sym:'CX',bg:'#007070',glow:'#007070',
-          q:Math.min(ctrlQ,tgtQ),q2:Math.max(ctrlQ,tgtQ),
-          ctrlQ,tgtQ,col:ci,type:'2q'});
+          q:Math.min(cq,tq),q2:Math.max(cq,tq),ctrlQ:cq,tgtQ:tq,col:ci,type:'2q'});
         return;
       }
       // CZ: ■ + ┤Z├
-      const zBoxQs=boxItems.filter(s=>s.tok.name.toUpperCase()==='Z').map(s=>s.qi);
-      if(ctrlQs.length===1 && zBoxQs.length>=1){
-        const ctrlQ=ctrlQs[0],tgtQ=zBoxQs[0];
+      const zBoxQs=boxItems.filter(s=>s.name.toUpperCase()==='Z').map(s=>s.qi);
+      if(ctrlQs.length===1 && zBoxQs.length>=1) {
+        const [cq,tq]=[ctrlQs[0],zBoxQs[0]];
         gates.push({id:'CZ',sym:'CZ',bg:'#00695c',glow:'#00695c',
-          q:Math.min(ctrlQ,tgtQ),q2:Math.max(ctrlQ,tgtQ),
-          ctrlQ,tgtQ,col:ci,type:'2q'});
+          q:Math.min(cq,tq),q2:Math.max(cq,tq),ctrlQ:cq,tgtQ:tq,col:ci,type:'2q'});
         return;
       }
-      // Genérica controlada: ■ + caja con cualquier nombre
-      const nonXQs=boxItems.filter(s=>s.tok.name.toUpperCase()!=='X').map(s=>s.qi);
-      if(ctrlQs.length===1 && nonXQs.length>=1){
-        const ctrlQ=ctrlQs[0],tgtQ=nonXQs[0];
-        const boxName=sorted.find(s=>s.qi===tgtQ)?.tok.name||'?';
-        const isZ=boxName.toUpperCase()==='Z';
-        gates.push({
-          id:isZ?'CZ':'CG',sym:boxName,
-          bg:isZ?'#00695c':gc(boxName),glow:isZ?'#00695c':gc(boxName),
-          q:Math.min(ctrlQ,tgtQ),q2:Math.max(ctrlQ,tgtQ),
-          ctrlQ,tgtQ,col:ci,type:'2q',isCZ:isZ
-        });
+      // Controlada genérica: ■ + ┤OTRO├
+      const nonXQs=boxItems.filter(s=>s.name.toUpperCase()!=='X').map(s=>s.qi);
+      if(ctrlQs.length===1 && nonXQs.length>=1) {
+        const [cq,tq]=[ctrlQs[0],nonXQs[0]];
+        const bname=col.find(s=>s.qi===tq)?.name||'?';
+        const isZ=bname.toUpperCase()==='Z';
+        gates.push({id:isZ?'CZ':'CG',sym:bname,
+          bg:isZ?'#00695c':gc(bname),glow:isZ?'#00695c':gc(bname),
+          q:Math.min(cq,tq),q2:Math.max(cq,tq),ctrlQ:cq,tgtQ:tq,
+          col:ci,type:'2q',isCZ:isZ});
         return;
       }
     }
 
-    // ── CASO 4: dos ■ = CZ ─────────────────────────────────────
-    if(ctrlQs.length===2 && tgtQs.length===0 && boxQs.length===0 && swapQs.length===0){
-      const [ctrlQ,tgtQ]=ctrlQs.slice().sort((a,b)=>a-b);
-      gates.push({id:'CZ',sym:'CZ',bg:'#00695c',glow:'#00695c',
-        q:ctrlQ,q2:tgtQ,ctrlQ,tgtQ,col:ci,type:'2q'});
-      return;
-    }
-
-    // ── CASO 5: dos ┤X├ sin control = SWAP ────────────────────
-    if(xBoxQs.length>=2 && ctrlQs.length===0){
+    // SWAP moderno: ┤X├ + ┤X├ sin control
+    if(xBoxQs.length>=2 && ctrlQs.length===0) {
       const [q1,q2]=xBoxQs.slice().sort((a,b)=>a-b);
       gates.push({id:'SWAP',sym:'SW',bg:'#1565c0',glow:'#1565c0',
         q:q1,q2,ctrlQ:q1,tgtQ:q2,col:ci,type:'2q'});
       return;
     }
 
-    // ── CASO 6: resto → individuales ──────────────────────────
-    sorted.forEach(s=>{
-      const name=s.tok.name;
-      const isMeas=s.tok.type==='meas'||name.toUpperCase()==='M'||name.toUpperCase()==='MEAS';
-      if(isMeas){
-        gates.push({id:'M',sym:'M',bg:'#6d4c41',glow:'#6d4c41',
-          q:s.qi,col:ci,type:'1q'});
-      } else if(s.tok.type==='ctrl'){
-        // Control suelto sin companion → dibujarlo como punto
-        gates.push({id:'CTRL',sym:'●',bg:'#0088ff',glow:'#0088ff',
-          q:s.qi,col:ci,type:'1q'});
-      } else {
-        const id=name.toUpperCase().replace(/\s*\(.*\)/,'').replace(/[^A-Z0-9√]/g,'');
-        gates.push({id,sym:name.length>4?name.slice(0,3):name,
-          bg:gc(name),glow:gc(name),q:s.qi,col:ci,type:'1q',name});
-      }
-    });
+    // Resto → puertas individuales
+    col.forEach(s => push1q(s));
   });
 
-  // ── DEPTH — idéntico al arquitecto cuántico ──────────────────
-  const depth=new Array(nQ).fill(0);
-  const placed=gates.map(g=>{
+  // ── PASO 4: DEPTH — idéntico al arquitecto cuántico ──────────
+  const depth = new Array(nQ).fill(0);
+  const placed = gates.map(g => {
     let col;
-    if(g.q3!==undefined){
+    if(g.q3!==undefined) {
       col=Math.max(depth[g.q]||0,depth[g.q2]||0,depth[g.q3]||0);
-      depth[g.q]=col+1;depth[g.q2]=col+1;depth[g.q3]=col+1;
-    } else if(g.q2!==undefined){
+      depth[g.q]=col+1; depth[g.q2]=col+1; depth[g.q3]=col+1;
+    } else if(g.q2!==undefined) {
       col=Math.max(depth[g.q]||0,depth[g.q2]||0);
-      depth[g.q]=col+1;depth[g.q2]=col+1;
+      depth[g.q]=col+1; depth[g.q2]=col+1;
     } else {
       col=depth[g.q]||0;
       depth[g.q]=col+1;
     }
-    return {...g,col};
+    return {...g, col};
   });
 
-  // ── RENDER — HTML + SVG posicionado, idéntico al arquitecto ──
+  // ── PASO 5: RENDER — HTML + SVG (idéntico al arquitecto) ─────
   const ROW_HEIGHT=56, step=52;
-  const totalCols=Math.max(...depth,1);
+  const totalCols=Math.max(...depth, 1);
   const wireWidth=totalCols*step+90;
   const totalH=nQ*ROW_HEIGHT;
-  // Y de un qubit dentro de un SVG que empieza en topQ
   const qY=(q,topQ)=>(q-topQ)*ROW_HEIGHT+ROW_HEIGHT/2;
 
   let html=`<div style="position:relative;min-width:${wireWidth}px;height:${totalH}px;">`;
 
-  // Cables + etiquetas de qubit
-  for(let q=0;q<nQ;q++){
+  // Cables + etiquetas
+  for(let q=0; q<nQ; q++) {
     html+=`<div style="position:absolute;top:${q*ROW_HEIGHT}px;left:0;right:0;height:${ROW_HEIGHT}px;">
       <div style="position:absolute;left:0;top:50%;transform:translateY(-50%);
         width:50px;text-align:right;padding-right:6px;
@@ -1030,20 +1022,19 @@ function buildCircuitOut(text){
     </div>`;
   }
 
-  placed.forEach(g=>{
+  // Puertas
+  placed.forEach(g => {
     const left=g.col*step+56;
 
     // ── 3 QUBITS ────────────────────────────────────────────────
-    if(g.q3!==undefined){
+    if(g.q3!==undefined) {
       const qs=[g.q,g.q2,g.q3].sort((a,b)=>a-b);
-      const topQ=qs[0];
+      const topQ=qs[0], topY=topQ*ROW_HEIGHT;
       const svgH=(qs[2]-qs[0])*ROW_HEIGHT+ROW_HEIGHT;
-      const topY=topQ*ROW_HEIGHT;
       const clr=g.bg||'#005f6a';
-      let svg='';
 
-      if(g.id==='CCX'){
-        // Toffoli: ■ ctrl1 + ■ ctrl2 + ⊕ target
+      let svg='';
+      if(g.id==='CCX') {
         const c1=g.ctrlQ1!==undefined?g.ctrlQ1:qs[0];
         const c2=g.ctrlQ2!==undefined?g.ctrlQ2:qs[1];
         const t =g.tgtQ  !==undefined?g.tgtQ  :qs[2];
@@ -1061,46 +1052,41 @@ function buildCircuitOut(text){
           <line x1="26" y1="${qY(t,topQ)-10}" x2="26" y2="${qY(t,topQ)+10}"
             stroke="${clr}" stroke-width="2"/>
         </svg>`;
-
       } else {
         // CSWAP Fredkin: ■ ctrl + ╳ sw1 + ╳ sw2
         const ctrl=g.ctrlQ1!==undefined?g.ctrlQ1:qs[0];
-        const sw1 =g.swapQ1!==undefined?g.swapQ1:qs.find(q=>q!==ctrl)||qs[1];
-        const sw2 =g.swapQ2!==undefined?g.swapQ2:qs.filter(q=>q!==ctrl).pop()||qs[2];
+        const sw1 =g.swapQ1!==undefined?g.swapQ1:(qs.find(q=>q!==ctrl)||qs[1]);
+        const sw2 =g.swapQ2!==undefined?g.swapQ2:(qs.filter(q=>q!==ctrl).pop()||qs[2]);
         svg=`<svg width="52" height="${svgH}" viewBox="0 0 52 ${svgH}">
           <line x1="26" y1="${qY(qs[0],topQ)}" x2="26" y2="${qY(qs[2],topQ)}"
             stroke="${clr}" stroke-width="2.5"/>
           <circle cx="26" cy="${qY(ctrl,topQ)}" r="8"
             fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
           <line x1="16" y1="${qY(sw1,topQ)-9}" x2="36" y2="${qY(sw1,topQ)+9}"
-            stroke="${clr}" stroke-width="2.5"/>
+            stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
           <line x1="36" y1="${qY(sw1,topQ)-9}" x2="16" y2="${qY(sw1,topQ)+9}"
-            stroke="${clr}" stroke-width="2.5"/>
+            stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
           <line x1="16" y1="${qY(sw2,topQ)-9}" x2="36" y2="${qY(sw2,topQ)+9}"
-            stroke="${clr}" stroke-width="2.5"/>
+            stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
           <line x1="36" y1="${qY(sw2,topQ)-9}" x2="16" y2="${qY(sw2,topQ)+9}"
-            stroke="${clr}" stroke-width="2.5"/>
+            stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
         </svg>`;
       }
       html+=`<div style="position:absolute;left:${left}px;top:${topY}px;">${svg}</div>`;
 
     // ── 2 QUBITS ────────────────────────────────────────────────
-    } else if(g.q2!==undefined){
-      const topQ=Math.min(g.q,g.q2);
-      const botQ=Math.max(g.q,g.q2);
+    } else if(g.q2!==undefined) {
+      const topQ=Math.min(g.q,g.q2), botQ=Math.max(g.q,g.q2);
       const topY=topQ*ROW_HEIGHT;
       const svgH=(botQ-topQ)*ROW_HEIGHT+ROW_HEIGHT;
       const clr=g.bg||'#007070';
       const ctrlQ=g.ctrlQ!==undefined?g.ctrlQ:topQ;
       const tgtQ =g.tgtQ !==undefined?g.tgtQ :botQ;
-      const ctrlY=qY(ctrlQ,topQ);
-      const tgtY =qY(tgtQ, topQ);
-      const ly1=Math.min(ctrlY,tgtY);
-      const ly2=Math.max(ctrlY,tgtY);
+      const ctrlY=qY(ctrlQ,topQ), tgtY=qY(tgtQ,topQ);
+      const ly1=Math.min(ctrlY,tgtY), ly2=Math.max(ctrlY,tgtY);
       let svg='';
 
-      if(g.id==='CX'){
-        // ■ control + ⊕ target (círculo vacío + cruz) — CNOT
+      if(g.id==='CX') {
         svg=`<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
           <line x1="24" y1="${ly1}" x2="24" y2="${ly2}"
             stroke="${clr}" stroke-width="2.5"/>
@@ -1113,9 +1099,7 @@ function buildCircuitOut(text){
           <line x1="24" y1="${tgtY-10}" x2="24" y2="${tgtY+10}"
             stroke="${clr}" stroke-width="2"/>
         </svg>`;
-
-      } else if(g.id==='CZ'){
-        // ■ control + ■ target — CZ (simétrico)
+      } else if(g.id==='CZ') {
         svg=`<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
           <line x1="24" y1="${ly1}" x2="24" y2="${ly2}"
             stroke="${clr}" stroke-width="2.5"/>
@@ -1124,9 +1108,7 @@ function buildCircuitOut(text){
           <circle cx="24" cy="${tgtY}" r="8"
             fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
         </svg>`;
-
-      } else if(g.id==='SWAP'){
-        // ╳ swap1 + ╳ swap2 conectados
+      } else if(g.id==='SWAP') {
         svg=`<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
           <line x1="24" y1="${ly1}" x2="24" y2="${ly2}"
             stroke="${clr}" stroke-width="2.5"/>
@@ -1134,16 +1116,14 @@ function buildCircuitOut(text){
             stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
           <line x1="34" y1="${ctrlY-9}" x2="14" y2="${ctrlY+9}"
             stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
-          <line x1="14" y1="${tgtY-9}" x2="34" y2="${tgtY+9}"
+          <line x1="14" y1="${tgtY-9}"  x2="34" y2="${tgtY+9}"
             stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
-          <line x1="34" y1="${tgtY-9}" x2="14" y2="${tgtY+9}"
+          <line x1="34" y1="${tgtY-9}"  x2="14" y2="${tgtY+9}"
             stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
         </svg>`;
-
       } else {
-        // Controlada genérica: ■ ctrl + caja con nombre target
-        const sym=g.sym||g.id;
-        const fs=sym.length<=2?13:sym.length===3?11:9;
+        // Controlada genérica: ● ctrl + caja target
+        const sym=g.sym||g.id; const fs=sym.length<=2?13:sym.length===3?11:9;
         const boxY=tgtY-19;
         svg=`<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
           <line x1="24" y1="${ly1}" x2="24" y2="${ly2}"
@@ -1152,10 +1132,9 @@ function buildCircuitOut(text){
             fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
           <rect x="4" y="${boxY}" width="40" height="38" rx="6"
             fill="${clr}" stroke="rgba(255,255,255,.28)" stroke-width="1.4" fill-opacity=".85"/>
-          <rect x="6" y="${boxY+2}" width="36" height="4" rx="4"
-            fill="rgba(255,255,255,.18)"/>
-          <text x="24" y="${tgtY+fs/3}"
-            text-anchor="middle" font-family="JetBrains Mono,monospace"
+          <rect x="6" y="${boxY+2}" width="36" height="4" rx="4" fill="rgba(255,255,255,.18)"/>
+          <text x="24" y="${tgtY+fs/3}" text-anchor="middle"
+            font-family="JetBrains Mono,monospace"
             font-size="${fs}" font-weight="bold" fill="white">${escH(sym)}</text>
         </svg>`;
       }
@@ -1163,13 +1142,12 @@ function buildCircuitOut(text){
 
     // ── 1 QUBIT ──────────────────────────────────────────────────
     } else {
-      const yPos=g.q*ROW_HEIGHT;
-      const clr=g.bg||'#1a4a8a';
+      const yPos=g.q*ROW_HEIGHT, clr=g.bg||'#1a4a8a';
       const sym=g.sym||g.id||'?';
       const display=sym.length>4?sym.slice(0,3):sym;
       const fs=display.length<=2?13:display.length===3?11:9;
 
-      if(g.id==='M'){
+      if(g.id==='M') {
         html+=`<div style="position:absolute;left:${left}px;top:${yPos+ROW_HEIGHT/2}px;transform:translateY(-50%);">
           <svg width="44" height="38" viewBox="0 0 44 38">
             <rect x="1" y="1" width="42" height="36" rx="6"
@@ -1182,15 +1160,7 @@ function buildCircuitOut(text){
             <circle cx="22" cy="30" r="2.5" fill="#ff9580"/>
           </svg>
         </div>`;
-      } else if(g.id==='CTRL'){
-        // Punto de control suelto (sin companion detectado)
-        html+=`<div style="position:absolute;left:${left+8}px;top:${yPos+ROW_HEIGHT/2}px;transform:translateY(-50%);">
-          <svg width="24" height="24" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="8" fill="#0088ff" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-          </svg>
-        </div>`;
       } else {
-        // Caja estándar con gradiente
         html+=`<div style="position:absolute;left:${left}px;top:${yPos+ROW_HEIGHT/2}px;transform:translateY(-50%);">
           <svg width="44" height="38" viewBox="0 0 44 38">
             <defs>
@@ -1212,13 +1182,11 @@ function buildCircuitOut(text){
   });
 
   html+='</div>';
-
   return `<div style="padding:.45rem .55rem .7rem;background:#020c18;border-top:1px solid rgba(0,136,255,.1);overflow-x:auto;">
     <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.1rem 0 .42rem;letter-spacing:.06em;">⚛ CIRCUITO CUÁNTICO</div>
     ${html}
   </div>`;
 }
-
 
 
 function buildProbsOut(probs,shots,sim){
