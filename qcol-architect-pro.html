@@ -502,7 +502,7 @@ s.blt{color:#ffb86c;}
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
 <script>
 // ═══════════════════════════════════════════════════════════════
-// QCOL QUANTUM NOTEBOOK v5.1 — CORREGIDO (Renderizado Robusto)
+// QCOL QUANTUM NOTEBOOK v5.0 — Output completo + Expo mode
 // ═══════════════════════════════════════════════════════════════
 let curUser=null,engineURL='',engineOK=false,running=false;
 let curView='notebook',cells=[],curCellId=null,execCounter=0;
@@ -600,232 +600,9 @@ import matplotlib.pyplot as plt
 import io, base64
 `;
 
-// ─────────────────────────────────────────────────────────────────
-// 🚀 NUEVO: Funciones de Renderizado Robusto de Circuitos (Arquitecto)
-// ─────────────────────────────────────────────────────────────────
-
-// Parsea el código Qiskit para extraer el circuito (número de qubits y puertas)
-function parseQiskitCodeForCircuit(code) {
-    const qcMatch = code.match(/qc\s*=\s*QuantumCircuit\s*\(\s*(\d+)\s*(?:,\s*(\d+)\s*)?\)/);
-    if (!qcMatch) return null;
-
-    const numQubits = parseInt(qcMatch[1], 10);
-    const gates = [];
-    const lines = code.split('\n');
-
-    const gateMap = {
-        'h': 'H', 'x': 'X', 'y': 'Y', 'z': 'Z', 's': 'S', 't': 'T', 'sx': 'SX',
-        'id': 'I', 'reset': 'RST', 'measure': 'M',
-        'cx': 'CX', 'cz': 'CZ', 'swap': 'SWAP', 'ch': 'CH', 'cy': 'CY', 'cp': 'CP',
-        'ccx': 'CCX', 'cswap': 'CSW', 'barrier': 'BAR'
-    };
-
-    lines.forEach(line => {
-        if (line.trim().startsWith('#')) return;
-        const methodMatch = line.match(/qc\.(\w+)\s*\((.*)\)/);
-        if (!methodMatch) return;
-
-        const method = methodMatch[1].toLowerCase();
-        const argsStr = methodMatch[2].trim();
-
-        if (!gateMap[method]) return;
-
-        const gateId = gateMap[method];
-        const args = argsStr.split(',').map(arg => arg.trim());
-
-        if (['h', 'x', 'y', 'z', 's', 't', 'sx', 'id'].includes(method) ||
-            (method === 'measure' && args.length === 2) || method === 'reset' || method === 'barrier') {
-            const q = parseInt(args[0], 10);
-            if (!isNaN(q) && q < numQubits) {
-                gates.push({ id: gateId, q, uid: genId() });
-            }
-        }
-        else if (['rx', 'ry', 'rz'].includes(method)) {
-            const q = parseInt(args[1], 10);
-            if (!isNaN(q) && q < numQubits) {
-                const angle = args[0];
-                let sym = method.toUpperCase();
-                if (angle.includes('pi')) sym += '(π)';
-                gates.push({ id: sym, q, uid: genId(), isRotation: true });
-            }
-        }
-        else if (['cx', 'cz', 'swap', 'ch', 'cy', 'cp'].includes(method) && args.length >= 2) {
-            const q1 = parseInt(args[0], 10);
-            const q2 = parseInt(args[1], 10);
-            if (!isNaN(q1) && !isNaN(q2) && q1 < numQubits && q2 < numQubits) {
-                gates.push({ id: gateId, q: q1, q2: q2, uid: genId() });
-            }
-        }
-        else if (['ccx', 'cswap'].includes(method) && args.length >= 3) {
-            const q1 = parseInt(args[0], 10);
-            const q2 = parseInt(args[1], 10);
-            const q3 = parseInt(args[2], 10);
-            if (!isNaN(q1) && !isNaN(q2) && !isNaN(q3) && q1 < numQubits && q2 < numQubits && q3 < numQubits) {
-                gates.push({ id: gateId, q: q1, q2: q2, q3: q3, uid: genId() });
-            }
-        }
-    });
-
-    return { numQubits, gates };
-}
-
-// Renderiza el circuito en SVG (estilo Arquitecto)
-function renderCircuitSVG(circuitData) {
-    if (!circuitData || circuitData.numQubits === 0) return '';
-
-    const { numQubits, gates } = circuitData;
-    const ROW_HEIGHT = 56;
-    const STEP = 52;
-    const WIRE_LABEL_WIDTH = 50;
-
-    const depth = Array(numQubits).fill(0);
-    const placed = gates.map(g => {
-        let col;
-        if (g.q3 !== undefined) {
-            col = Math.max(depth[g.q] || 0, depth[g.q2] || 0, depth[g.q3] || 0);
-            depth[g.q] = col + 1; depth[g.q2] = col + 1; depth[g.q3] = col + 1;
-        } else if (g.q2 !== undefined) {
-            col = Math.max(depth[g.q] || 0, depth[g.q2] || 0);
-            depth[g.q] = col + 1; depth[g.q2] = col + 1;
-        } else {
-            col = depth[g.q] || 0;
-            depth[g.q] = col + 1;
-        }
-        return { ...g, col };
-    });
-
-    const totalCols = Math.max(...depth, 1);
-    const wireWidth = totalCols * STEP + 90;
-    const totalH = numQubits * ROW_HEIGHT;
-    const qY = (q, topQ) => (q - topQ) * ROW_HEIGHT + ROW_HEIGHT / 2;
-
-    let html = `<div style="position:relative;min-width:${wireWidth}px;height:${totalH}px;margin-bottom: 10px;">`;
-
-    for (let q = 0; q < numQubits; q++) {
-        html += `<div style="position:absolute;top:${q * ROW_HEIGHT}px;left:0;right:0;height:${ROW_HEIGHT}px;">
-            <div style="position:absolute;left:0;top:50%;transform:translateY(-50%);width:${WIRE_LABEL_WIDTH}px;text-align:right;padding-right:6px;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:600;color:#bd93f9;">q[${q}]</div>
-            <div style="position:absolute;left:${WIRE_LABEL_WIDTH}px;right:0;top:50%;border-top:1.8px solid rgba(0,136,255,.22);"></div>
-        </div>`;
-    }
-
-    placed.forEach(g => {
-        const left = g.col * STEP + WIRE_LABEL_WIDTH + 6;
-
-        if (g.q3 !== undefined) {
-            const qs = [g.q, g.q2, g.q3].sort((a, b) => a - b);
-            const topQ = qs[0];
-            const topY = topQ * ROW_HEIGHT;
-            const svgH = (qs[2] - qs[0]) * ROW_HEIGHT + ROW_HEIGHT;
-            const clr = (g.id === 'CCX') ? '#005f6a' : '#283593';
-            const isCCX = g.id === 'CCX';
-
-            let svg = `<svg width="52" height="${svgH}" viewBox="0 0 52 ${svgH}">
-                <line x1="26" y1="${qY(qs[0], topQ)}" x2="26" y2="${qY(qs[2], topQ)}" stroke="${clr}" stroke-width="2.5"/>`;
-
-            if (isCCX) {
-                svg += `<circle cx="26" cy="${qY(g.q, topQ)}" r="8" fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-                        <circle cx="26" cy="${qY(g.q2, topQ)}" r="8" fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-                        <circle cx="26" cy="${qY(g.q3, topQ)}" r="14" fill="none" stroke="${clr}" stroke-width="2.5"/>
-                        <line x1="18" y1="${qY(g.q3, topQ)}" x2="34" y2="${qY(g.q3, topQ)}" stroke="${clr}" stroke-width="2"/>
-                        <line x1="26" y1="${qY(g.q3, topQ) - 10}" x2="26" y2="${qY(g.q3, topQ) + 10}" stroke="${clr}" stroke-width="2"/>`;
-            } else {
-                svg += `<circle cx="26" cy="${qY(g.q, topQ)}" r="8" fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-                        <line x1="16" y1="${qY(g.q2, topQ) - 9}" x2="36" y2="${qY(g.q2, topQ) + 9}" stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
-                        <line x1="36" y1="${qY(g.q2, topQ) - 9}" x2="16" y2="${qY(g.q2, topQ) + 9}" stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
-                        <line x1="16" y1="${qY(g.q3, topQ) - 9}" x2="36" y2="${qY(g.q3, topQ) + 9}" stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
-                        <line x1="36" y1="${qY(g.q3, topQ) - 9}" x2="16" y2="${qY(g.q3, topQ) + 9}" stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>`;
-            }
-            svg += `</svg>`;
-            html += `<div style="position:absolute;left:${left}px;top:${topY}px;">${svg}</div>`;
-        }
-        else if (g.q2 !== undefined) {
-            const topQ = Math.min(g.q, g.q2);
-            const botQ = Math.max(g.q, g.q2);
-            const topY = topQ * ROW_HEIGHT;
-            const svgH = (botQ - topQ) * ROW_HEIGHT + ROW_HEIGHT;
-            let clr = '#007070';
-            if (g.id === 'CZ') clr = '#00695c';
-            else if (g.id === 'SWAP') clr = '#1565c0';
-            else if (g.id === 'CH' || g.id === 'CY' || g.id === 'CP') clr = '#5e35b1';
-
-            const ctrlY = qY(g.q, topQ);
-            const tgtY = qY(g.q2, topQ);
-            const ly1 = Math.min(ctrlY, tgtY);
-            const ly2 = Math.max(ctrlY, tgtY);
-            let svg = `<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
-                <line x1="24" y1="${ly1}" x2="24" y2="${ly2}" stroke="${clr}" stroke-width="2.5"/>`;
-
-            if (g.id === 'CX') {
-                svg += `<circle cx="24" cy="${ctrlY}" r="8" fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-                        <circle cx="24" cy="${tgtY}" r="14" fill="none" stroke="${clr}" stroke-width="2.5"/>
-                        <line x1="16" y1="${tgtY}" x2="32" y2="${tgtY}" stroke="${clr}" stroke-width="2"/>
-                        <line x1="24" y1="${tgtY - 10}" x2="24" y2="${tgtY + 10}" stroke="${clr}" stroke-width="2"/>`;
-            } else if (g.id === 'CZ') {
-                svg += `<circle cx="24" cy="${ctrlY}" r="8" fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-                        <circle cx="24" cy="${tgtY}" r="8" fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>`;
-            } else if (g.id === 'SWAP') {
-                svg += `<line x1="14" y1="${ctrlY - 9}" x2="34" y2="${ctrlY + 9}" stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
-                        <line x1="34" y1="${ctrlY - 9}" x2="14" y2="${ctrlY + 9}" stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
-                        <line x1="14" y1="${tgtY - 9}" x2="34" y2="${tgtY + 9}" stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
-                        <line x1="34" y1="${tgtY - 9}" x2="14" y2="${tgtY + 9}" stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>`;
-            } else {
-                const sym = g.id.substring(1);
-                const fs = sym.length <= 2 ? 13 : 11;
-                const boxY = tgtY - 19;
-                svg += `<circle cx="24" cy="${ctrlY}" r="8" fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
-                        <rect x="4" y="${boxY}" width="40" height="38" rx="6" fill="${clr}" stroke="rgba(255,255,255,.28)" stroke-width="1.4" fill-opacity=".85"/>
-                        <rect x="6" y="${boxY + 2}" width="36" height="4" rx="4" fill="rgba(255,255,255,.18)"/>
-                        <text x="24" y="${tgtY + fs / 3}" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="${fs}" font-weight="bold" fill="white">${sym}</text>`;
-            }
-            svg += `</svg>`;
-            html += `<div style="position:absolute;left:${left}px;top:${topY}px;">${svg}</div>`;
-        }
-        else {
-            const yPos = g.q * ROW_HEIGHT;
-            let clr = '#1a4a8a';
-            let sym = g.id;
-            if (g.id === 'H') clr = '#1a5fb4';
-            else if (g.id === 'X') clr = '#a51d2d';
-            else if (g.id === 'Y') clr = '#613583';
-            else if (g.id === 'Z') clr = '#1c71d8';
-            else if (g.id === 'S') clr = '#c64600';
-            else if (g.id === 'T') clr = '#26a269';
-            else if (g.id === 'SX') { clr = '#a51d2d'; sym = '√X'; }
-            else if (g.id.startsWith('RX') || g.id.startsWith('RY') || g.id.startsWith('RZ')) {
-                clr = '#0077c2'; sym = g.id;
-            }
-            else if (g.id === 'M') {
-                html += `<div style="position:absolute;left:${left}px;top:${yPos + ROW_HEIGHT / 2}px;transform:translateY(-50%);">
-                    <svg width="44" height="38" viewBox="0 0 44 38">
-                        <rect x="1" y="1" width="42" height="36" rx="6" fill="rgba(109,76,65,.3)" stroke="#6d4c41" stroke-width="1.8"/>
-                        <rect x="3" y="3" width="38" height="4" rx="4" fill="rgba(255,255,255,.12)"/>
-                        <path d="M 8 30 A 14 14 0 0 1 36 30" fill="none" stroke="#ff9580" stroke-width="1.8" stroke-linecap="round"/>
-                        <line x1="22" y1="30" x2="32" y2="14" stroke="#ff9580" stroke-width="1.6" stroke-linecap="round"/>
-                        <circle cx="22" cy="30" r="2.5" fill="#ff9580"/>
-                    </svg>
-                </div>`;
-                return;
-            }
-
-            const display = sym.length > 4 ? sym.slice(0, 3) : sym;
-            const fs = display.length <= 2 ? 13 : 11;
-            html += `<div style="position:absolute;left:${left}px;top:${yPos + ROW_HEIGHT / 2}px;transform:translateY(-50%);">
-                <svg width="44" height="38" viewBox="0 0 44 38">
-                    <defs><linearGradient id="g${g.uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${clr}" stop-opacity=".95"/><stop offset="100%" stop-color="${clr}" stop-opacity=".6"/></linearGradient></defs>
-                    <rect x="1" y="1" width="42" height="36" rx="6" fill="url(#g${g.uid})" stroke="rgba(255,255,255,.3)" stroke-width="1.4"/>
-                    <rect x="3" y="3" width="38" height="4" rx="4" fill="rgba(255,255,255,.2)"/>
-                    <text x="22" y="${19 + fs / 3}" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="${fs}" font-weight="bold" fill="white">${display}</text>
-                </svg>
-            </div>`;
-        }
-    });
-
-    html += '</div>';
-    return html;
-}
-
 // ── PARSEAR RESPUESTA DEL SERVIDOR ────────────────────────────
 function parseServerResponse(raw){
+  // raw.data[0] puede ser string JSON o dict ya parseado
   let d=null;
   try{
     const item=raw?.data?.[0];
@@ -835,40 +612,32 @@ function parseServerResponse(raw){
   return d;
 }
 
-// ── RENDER DE OUTPUT COMPLETO (CORREGIDO) ─────────────────────
+// ── RENDER DE OUTPUT COMPLETO ─────────────────────────────────
 function renderOutput(outArea, d, elapsed, cellId){
   if(!outArea)return;
   const t0=elapsed?`${elapsed}s`:null;
   let html='';
 
+  // Cabecera
   const isOk=d.success!==false;
   const hdrCls=isOk?'out-header-ok':'out-header-err';
   const hdrIcon=isOk?'✅':'❌';
   html+=`<div class="out-header ${hdrCls}">${hdrIcon} ${isOk?'Ejecutado':'Error'}${t0?' · '+t0:''}</div>`;
 
-  // ── NUEVO: Intentar extraer y renderizar el circuito desde el código de la celda ──
-  const cell = cells.find(c => c.id === cellId);
-  if (cell && cell.type === 'qiskit') {
-    const circuitData = parseQiskitCodeForCircuit(cell.code);
-    if (circuitData && circuitData.gates.length > 0) {
-      html += `<div style="padding:.45rem .55rem .7rem;background:#020c18;border-top:1px solid rgba(0,136,255,.1);overflow-x:auto;">
-        <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.1rem 0 .42rem;letter-spacing:.06em;">⚛ CIRCUITO CUÁNTICO</div>
-        ${renderCircuitSVG(circuitData)}
-      </div>`;
-    }
-  }
-
-  // ── STDOUT ── (Filtramos las líneas de dibujo ASCII para no duplicar)
+  // ── STDOUT completo ──
   if(d.output&&d.output.trim()){
+    // Detectar si la salida contiene un diagrama de circuito (líneas con ─, │, ┤, ├, etc.)
     const lines=d.output.split('\n');
+    let circuitBlock=[];
     let textBlock=[];
+    let inCircuit=false;
     for(const line of lines){
       const isCircLine=/[─┤├┼╫│┐┘└┌╥╨╩╦╣╠═║╗╚╔╝╞╡╟╢]/.test(line)||/q_?\d+\s*:/.test(line)||/c:\s*\d/.test(line)||/^\s*(q\[|c\[|cr\[|qr\[)/.test(line);
-      if(!isCircLine) textBlock.push(line);
+      if(isCircLine){if(!inCircuit&&textBlock.length){html+=buildTextOut(textBlock.join('\n'));textBlock=[];}inCircuit=true;circuitBlock.push(line);}
+      else{if(inCircuit){html+=buildCircuitOut(circuitBlock.join('\n'));circuitBlock=[];inCircuit=false;}textBlock.push(line);}
     }
-    if(textBlock.length&&textBlock.join('').trim()){
-      html+=`<div class="out-stdout">${escH(textBlock.join('\n'))}</div>`;
-    }
+    if(inCircuit)html+=buildCircuitOut(circuitBlock.join('\n'));
+    if(textBlock.length&&textBlock.join('').trim())html+=buildTextOut(textBlock.join('\n'));
   }
 
   // ── STDERR ──
@@ -879,6 +648,7 @@ function renderOutput(outArea, d, elapsed, cellId){
   // ── PROBABILIDADES / COUNTS ──
   if(d.bloch&&d.bloch.probabilities){
     html+=buildProbsOut(d.bloch.probabilities,d.bloch.shots||1024,d.bloch.simulator||'AerSimulator');
+    // Añadir histograma canvas
     html+=buildHistogramOut(d.bloch.probabilities,d.bloch.shots||1024);
   }else if(d.counts){
     html+=buildProbsOut(d.counts,d.bloch?.shots||1024,'');
@@ -898,6 +668,7 @@ function renderOutput(outArea, d, elapsed, cellId){
     </div>`;
   }
 
+  // ── IMAGEN extra (plot_svg como fallback) ──
   if(d.plot_svg){
     html+=`<div style="padding:.3rem .5rem;background:#04080e;border-top:1px solid rgba(0,136,255,.08);">
       <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.2rem 0 .3rem;">DIAGRAMA SVG</div>
@@ -905,7 +676,9 @@ function renderOutput(outArea, d, elapsed, cellId){
     </div>`;
   }
 
+  // ── ERROR detallado ──
   if(!isOk&&d.output){
+    // Extraer línea de error
     const lineMatch = d.output.match(/[Ll]ine\s+(\d+)|línea\s+(\d+)/i);
     const errLine = lineMatch ? parseInt(lineMatch[1] || lineMatch[2]) : null;
     if (errLine && cellId) {
@@ -918,15 +691,487 @@ function renderOutput(outArea, d, elapsed, cellId){
   outArea.innerHTML=html||'<div class="out-stdout" style="color:var(--mu);">Sin salida</div>';
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Funciones de soporte para Output (PROBS, BLOCH, HISTOGRAMA, ERROR)
-// ─────────────────────────────────────────────────────────────────
+function buildTextOut(text){
+  if(!text.trim())return'';
+  // Detectar si es dict de resultados como {'00': 512, '11': 512}
+  if(/^\{['"0-9a-zA-Z_,:\s]+\}$/.test(text.trim())){
+    return`<div class="out-dict">${escH(text)}</div>`;
+  }
+  return`<div class="out-stdout">${escH(text)}</div>`;
+}
+
+function buildCircuitOut(text){
+  if(!text.trim()) return '';
+
+  const allLines = text.split('\n');
+  const wirePat = /^\s*(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/;
+
+  // ── PASO 1: Separar wire-lines e inter-wire lines ─────────────
+  const wireInfo  = [];   // [{qi,idx,label,offset,line}]
+  const interInfo = [];   // [{afterQi,idx,line}]
+  let curQi = -1;
+  allLines.forEach((line, idx) => {
+    const m = line.match(wirePat);
+    if(m){
+      curQi++;
+      wireInfo.push({qi:curQi, idx, label:m[1], offset:m[0].length, line});
+    } else if(curQi >= 0){
+      interInfo.push({afterQi:curQi, idx, line});
+    }
+  });
+  const nQ = curQi + 1;
+
+  if(nQ === 0){
+    // Fallback ASCII coloreado
+    let col = escH(text);
+    col = col.replace(/(q_?\d+|q\[\d+\]|qr\[\d+\])\s*:/g,
+      '<s style="color:#bd93f9;font-weight:700;font-style:normal">$1</s>:');
+    col = col.replace(/┤\s*([A-Za-z0-9√Rπ/.+\-]+(?:\([^)]*\))?)\s*[├┤]/g,
+      (m,g)=>`┤<s style="color:#00aaff;font-weight:700;font-style:normal"> ${g} </s>┤`);
+    col = col.replace(/─(M)─/g,
+      '─<s style="color:#ff9580;font-weight:700;font-style:normal">M</s>─');
+    return `<div style="padding:.4rem .55rem;background:#020c18;border-top:1px solid rgba(0,136,255,.1);">
+      <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.1rem 0 .3rem;">⚛ DIAGRAMA DEL CIRCUITO</div>
+      <div class="out-circuit-text">${col}</div>
+    </div>`;
+  }
+
+  const wireLabels = wireInfo.map(wi => wi.label);
+
+  // ── PASO 2: Columnas con │ (conexión vertical confirmada) ─────
+  // Qiskit dibuja │ entre qubits conectados, en la misma columna absoluta
+  const vertCols = new Set();
+  interInfo.forEach(il => {
+    [...il.line].forEach((c, col) => {
+      if(c === '│') vertCols.add(col);
+    });
+  });
+
+  // ── PASO 3: Tokenizar con posición ABSOLUTA ───────────────────
+  // (columna en la línea completa, incluyendo el label "q_0: ")
+  function tokenizeWire(wi){
+    const {line, offset} = wi;
+    const content = line.slice(offset);
+    const toks = [];
+
+    // Cajas ┤NAME├ — posición absoluta del centro
+    const BOX = /┤\s*((?:[^┤├\n])*?)\s*(?:├|┤)/g;
+    let m;
+    while((m = BOX.exec(content)) !== null){
+      const absCol = offset + m.index + Math.floor(m[0].length / 2);
+      const name = m[1].trim() || '?';
+      toks.push({type:'box', name, col:absCol,
+        absStart:offset+m.index, absEnd:offset+m.index+m[0].length});
+    }
+
+    // Símbolos de 1 carácter
+    const SYM = /(■|█|●)|(⊕)|(╳|×)/g;
+    while((m = SYM.exec(content)) !== null){
+      const absCol = offset + m.index;
+      // No añadir si está dentro de una caja
+      if(toks.some(t => t.type==='box' && absCol>=t.absStart && absCol<t.absEnd)) continue;
+      if(m[1])      toks.push({type:'ctrl', name:'■', col:absCol});
+      else if(m[2]) toks.push({type:'tgt',  name:'⊕', col:absCol});
+      else if(m[3]) toks.push({type:'swap', name:'╳', col:absCol});
+    }
+
+    // X SUELTO (bare X) — target de CX en Qiskit moderno
+    // SOLO si esa columna tiene │ en alguna línea inter-wire (= está conectado)
+    const BAREX = /(?:─)(X)(?:─)/g;
+    while((m = BAREX.exec(content)) !== null){
+      const absCol = offset + m.index + 1;
+      if(vertCols.has(absCol) && !toks.some(t => Math.abs(t.col-absCol) < 2)){
+        toks.push({type:'xtgt', name:'X', col:absCol});
+      }
+    }
+
+    // M medidor aislado (─M─)
+    const MEAS = /(?:─)(M)(?:─)/g;
+    while((m = MEAS.exec(content)) !== null){
+      const absCol = offset + m.index + 1;
+      if(!toks.some(t => Math.abs(t.col-absCol) < 2)){
+        toks.push({type:'meas', name:'M', col:absCol});
+      }
+    }
+
+    return toks.sort((a,b) => a.col - b.col);
+  }
+
+  // Recopilar todos los tokens
+  const allToks = [];
+  wireInfo.forEach(wi => {
+    tokenizeWire(wi).forEach(tok => allToks.push({qi:wi.qi, ...tok}));
+  });
+  allToks.sort((a,b) => a.col - b.col || a.qi - b.qi);
+
+  // ── PASO 4: AGRUPAR por columna absoluta exacta ───────────────
+  // Tokens de 1 char (■⊕╳X): agrupan por posición EXACTA
+  // Cajas ┤NAME├: agrupan con tolerancia ±3 (ancho variable del nombre)
+  const colMap = new Map();
+  allToks.forEach(tok => {
+    let key = tok.col;
+    if(tok.type === 'box'){
+      // Buscar clave existente dentro de ±3
+      let best = null, bestDist = 4;
+      for(const k of colMap.keys()){
+        const d = Math.abs(k - key);
+        if(d < bestDist){ bestDist = d; best = k; }
+      }
+      if(best !== null) key = best;
+    }
+    if(!colMap.has(key)) colMap.set(key, []);
+    const col = colMap.get(key);
+    if(!col.find(c => c.qi === tok.qi)) col.push(tok);
+  });
+
+  const columns = [...colMap.keys()].sort((a,b)=>a-b)
+    .map(k => colMap.get(k).slice().sort((a,b)=>a.qi-b.qi));
+
+  // ── PASO 5: IDENTIFICAR GATES ─────────────────────────────────
+  const COLORS = {
+    H:'#1a5fb4', X:'#c01c28', Y:'#7a3e99', Z:'#1c71d8',
+    S:'#c64600', T:'#26a269', SX:'#c01c28', '√X':'#c01c28',
+    RX:'#0077c2', RY:'#005f6a', RZ:'#5e35b1', P:'#5e35b1',
+    U:'#6a1b9a', CX:'#007070', CZ:'#00695c', SWAP:'#1565c0',
+    CCX:'#005f6a', CSW:'#283593', M:'#6d4c41',
+    DEFAULT:'#1a4a8a'
+  };
+  const gc = n => COLORS[n.replace(/\s*\(.*\)/,'').trim().toUpperCase()] || COLORS.DEFAULT;
+
+  const push1q = (s, ci) => {
+    const name = s.name||'?';
+    const isMeas = s.type==='meas' || ['M','MEAS'].includes(name.toUpperCase());
+    const id = isMeas ? 'M' : name.toUpperCase().replace(/\s*\(.*\)/,'').replace(/[^A-Z0-9√]/g,'');
+    gates.push({id, sym:name.length>4?name.slice(0,3):name,
+      bg:gc(name), glow:gc(name), q:s.qi, col:ci, type:'1q', name});
+  };
+
+  const gates = [];
+
+  columns.forEach((col, ci) => {
+    const ctrl  = col.filter(s=>s.type==='ctrl');
+    const tgt   = col.filter(s=>s.type==='tgt');
+    const swap  = col.filter(s=>s.type==='swap');
+    const xtgt  = col.filter(s=>s.type==='xtgt');  // bare X target
+    const box   = col.filter(s=>s.type==='box');
+    const meas  = col.filter(s=>s.type==='meas');
+
+    const cqs = ctrl.map(s=>s.qi);
+    const tqs = tgt .map(s=>s.qi);
+    const sqs = swap.map(s=>s.qi);
+    const xqs = xtgt.map(s=>s.qi);
+    const bqs = box .map(s=>s.qi);
+    const xbqs= box.filter(s=>s.name.toUpperCase()==='X').map(s=>s.qi);
+    const zbqs= box.filter(s=>s.name.toUpperCase()==='Z').map(s=>s.qi);
+    const mbqs= box.filter(s=>['M','MEAS'].includes(s.name.toUpperCase())).map(s=>s.qi);
+
+    // ── 1 token → puerta de 1 qubit ──────────────────────────
+    if(col.length === 1){ push1q(col[0], ci); return; }
+
+    // ── Múltiples medidores → individuales ───────────────────
+    if((meas.length > 0 || mbqs.length > 0) && cqs.length === 0){
+      [...meas, ...box.filter(s=>['M','MEAS'].includes(s.name.toUpperCase()))]
+        .forEach(s => gates.push({id:'M',sym:'M',bg:'#6d4c41',glow:'#6d4c41',
+          q:s.qi,col:ci,type:'1q'}));
+      box.filter(s=>!['M','MEAS'].includes(s.name.toUpperCase()))
+        .forEach(s => push1q(s, ci));
+      return;
+    }
+
+    // ══ TABLA COMPLETA DE REGLAS (todas las variantes de Qiskit) ═
+    // CX: ■+⊕  (clásico)
+    if(cqs.length===1 && tqs.length===1 && !sqs.length){
+      const [cq,tq]=[cqs[0],tqs[0]];
+      gates.push({id:'CX',sym:'CX',bg:'#007070',glow:'#007070',
+        q:Math.min(cq,tq),q2:Math.max(cq,tq),ctrlQ:cq,tgtQ:tq,col:ci,type:'2q'}); return;
+    }
+    // CX: ■+X suelto  (Qiskit moderno con │)
+    if(cqs.length===1 && xqs.length===1 && !sqs.length && !xbqs.length){
+      const [cq,tq]=[cqs[0],xqs[0]];
+      gates.push({id:'CX',sym:'CX',bg:'#007070',glow:'#007070',
+        q:Math.min(cq,tq),q2:Math.max(cq,tq),ctrlQ:cq,tgtQ:tq,col:ci,type:'2q'}); return;
+    }
+    // CX: ■+┤X├  (Qiskit con caja)
+    if(cqs.length===1 && xbqs.length===1 && !sqs.length){
+      const [cq,tq]=[cqs[0],xbqs[0]];
+      gates.push({id:'CX',sym:'CX',bg:'#007070',glow:'#007070',
+        q:Math.min(cq,tq),q2:Math.max(cq,tq),ctrlQ:cq,tgtQ:tq,col:ci,type:'2q'}); return;
+    }
+    // CCX: ■+■+⊕  o  ■+■+X  o  ■+■+┤X├
+    const allTgtQs = [...new Set([...tqs,...xqs,...xbqs])];
+    if(cqs.length===2 && allTgtQs.length>=1){
+      const qs=[...cqs,...allTgtQs].sort((a,b)=>a-b);
+      const tq=allTgtQs[0];
+      gates.push({id:'CCX',sym:'CCX',bg:'#005f6a',glow:'#005f6a',
+        q:qs[0],q2:qs[1],q3:qs[2],
+        ctrlQ1:cqs[0],ctrlQ2:cqs[1],tgtQ:tq,col:ci,type:'3q'}); return;
+    }
+    // CZ: ■+■  (dos controles exactos)
+    if(cqs.length===2 && !tqs.length && !sqs.length && !bqs.length && !xqs.length){
+      const [cq,tq]=cqs.slice().sort((a,b)=>a-b);
+      gates.push({id:'CZ',sym:'CZ',bg:'#00695c',glow:'#00695c',
+        q:cq,q2:tq,ctrlQ:cq,tgtQ:tq,col:ci,type:'2q'}); return;
+    }
+    // CZ: ■+┤Z├
+    if(cqs.length===1 && zbqs.length>=1){
+      const [cq,tq]=[cqs[0],zbqs[0]];
+      gates.push({id:'CZ',sym:'CZ',bg:'#00695c',glow:'#00695c',
+        q:Math.min(cq,tq),q2:Math.max(cq,tq),ctrlQ:cq,tgtQ:tq,col:ci,type:'2q'}); return;
+    }
+    // SWAP: ╳+╳
+    if(sqs.length>=2 && !cqs.length){
+      const [q1,q2]=sqs.slice().sort((a,b)=>a-b);
+      gates.push({id:'SWAP',sym:'SW',bg:'#1565c0',glow:'#1565c0',
+        q:q1,q2,ctrlQ:q1,tgtQ:q2,col:ci,type:'2q'}); return;
+    }
+    // CSWAP: ■+╳+╳
+    if(cqs.length===1 && sqs.length>=2){
+      const qs=[...cqs,...sqs].sort((a,b)=>a-b);
+      const [sw1,sw2]=sqs.slice().sort((a,b)=>a-b);
+      gates.push({id:'CSW',sym:'CSW',bg:'#283593',glow:'#283593',
+        q:qs[0],q2:qs[1],q3:qs[2],
+        ctrlQ1:cqs[0],swapQ1:sw1,swapQ2:sw2,col:ci,type:'3q'}); return;
+    }
+    // SWAP moderno: ┤X├+┤X├ sin control
+    if(xbqs.length>=2 && !cqs.length){
+      const [q1,q2]=xbqs.slice().sort((a,b)=>a-b);
+      gates.push({id:'SWAP',sym:'SW',bg:'#1565c0',glow:'#1565c0',
+        q:q1,q2,ctrlQ:q1,tgtQ:q2,col:ci,type:'2q'}); return;
+    }
+    // CSW moderno: ■+┤X├+┤X├
+    if(cqs.length===1 && xbqs.length>=2){
+      const qs=[...cqs,...xbqs].sort((a,b)=>a-b);
+      const [sw1,sw2]=xbqs.slice().sort((a,b)=>a-b);
+      gates.push({id:'CSW',sym:'CSW',bg:'#283593',glow:'#283593',
+        q:qs[0],q2:qs[1],q3:qs[2],
+        ctrlQ1:cqs[0],swapQ1:sw1,swapQ2:sw2,col:ci,type:'3q'}); return;
+    }
+    // Controlada genérica: ■ + caja con nombre
+    if(cqs.length===1 && bqs.length>=1){
+      const nonX=box.filter(s=>s.name.toUpperCase()!=='X');
+      if(nonX.length>=1){
+        const tq=nonX[0].qi, bname=nonX[0].name;
+        const cq=cqs[0];
+        const isZ=bname.toUpperCase()==='Z';
+        gates.push({id:isZ?'CZ':'CG',sym:bname,
+          bg:isZ?'#00695c':gc(bname),glow:isZ?'#00695c':gc(bname),
+          q:Math.min(cq,tq),q2:Math.max(cq,tq),ctrlQ:cq,tgtQ:tq,
+          col:ci,type:'2q',isCZ:isZ}); return;
+      }
+    }
+    // Resto → puertas individuales
+    col.forEach(s => push1q(s, ci));
+  });
+
+  // ── PASO 6: DEPTH — idéntico al arquitecto cuántico ──────────
+  const depth = new Array(nQ).fill(0);
+  const placed = gates.map(g => {
+    let col;
+    if(g.q3!==undefined){
+      col=Math.max(depth[g.q]||0,depth[g.q2]||0,depth[g.q3]||0);
+      depth[g.q]=col+1; depth[g.q2]=col+1; depth[g.q3]=col+1;
+    } else if(g.q2!==undefined){
+      col=Math.max(depth[g.q]||0,depth[g.q2]||0);
+      depth[g.q]=col+1; depth[g.q2]=col+1;
+    } else {
+      col=depth[g.q]||0; depth[g.q]=col+1;
+    }
+    return {...g, col};
+  });
+
+  // ── PASO 7: RENDER — HTML+SVG idéntico al arquitecto ─────────
+  const ROW_HEIGHT=56, step=52;
+  const totalCols=Math.max(...depth, 1);
+  const wireWidth=totalCols*step+90;
+  const totalH=nQ*ROW_HEIGHT;
+  const qY=(q,topQ)=>(q-topQ)*ROW_HEIGHT+ROW_HEIGHT/2;
+
+  let html=`<div style="position:relative;min-width:${wireWidth}px;height:${totalH}px;">`;
+
+  // Cables + etiquetas
+  for(let q=0; q<nQ; q++){
+    html+=`<div style="position:absolute;top:${q*ROW_HEIGHT}px;left:0;right:0;height:${ROW_HEIGHT}px;">
+      <div style="position:absolute;left:0;top:50%;transform:translateY(-50%);
+        width:50px;text-align:right;padding-right:6px;
+        font-family:JetBrains Mono,monospace;font-size:11px;font-weight:600;color:#bd93f9;">
+        ${escH(wireLabels[q]||`q[${q}]`)}
+      </div>
+      <div style="position:absolute;left:52px;right:0;top:50%;
+        border-top:1.8px solid rgba(0,136,255,.22);"></div>
+    </div>`;
+  }
+
+  placed.forEach(g => {
+    const left=g.col*step+56;
+
+    // ── 3 QUBITS ──────────────────────────────────────────────
+    if(g.q3!==undefined){
+      const qs=[g.q,g.q2,g.q3].sort((a,b)=>a-b);
+      const topQ=qs[0], topY=topQ*ROW_HEIGHT;
+      const svgH=(qs[2]-qs[0])*ROW_HEIGHT+ROW_HEIGHT;
+      const clr=g.bg||'#005f6a';
+      let svg='';
+
+      if(g.id==='CCX'){
+        const c1=g.ctrlQ1!==undefined?g.ctrlQ1:qs[0];
+        const c2=g.ctrlQ2!==undefined?g.ctrlQ2:qs[1];
+        const t =g.tgtQ  !==undefined?g.tgtQ  :qs[2];
+        svg=`<svg width="52" height="${svgH}" viewBox="0 0 52 ${svgH}">
+          <line x1="26" y1="${qY(qs[0],topQ)}" x2="26" y2="${qY(qs[2],topQ)}"
+            stroke="${clr}" stroke-width="2.5"/>
+          <circle cx="26" cy="${qY(c1,topQ)}" r="8"
+            fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <circle cx="26" cy="${qY(c2,topQ)}" r="8"
+            fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <circle cx="26" cy="${qY(t,topQ)}" r="14"
+            fill="none" stroke="${clr}" stroke-width="2.5"/>
+          <line x1="18" y1="${qY(t,topQ)}" x2="34" y2="${qY(t,topQ)}"
+            stroke="${clr}" stroke-width="2"/>
+          <line x1="26" y1="${qY(t,topQ)-10}" x2="26" y2="${qY(t,topQ)+10}"
+            stroke="${clr}" stroke-width="2"/>
+        </svg>`;
+      } else {
+        // CSWAP Fredkin: ■ ctrl + ╳ sw1 + ╳ sw2
+        const ctrl=g.ctrlQ1!==undefined?g.ctrlQ1:qs[0];
+        const sw1 =g.swapQ1!==undefined?g.swapQ1:(qs.find(q=>q!==ctrl)||qs[1]);
+        const sw2 =g.swapQ2!==undefined?g.swapQ2:(qs.filter(q=>q!==ctrl).pop()||qs[2]);
+        svg=`<svg width="52" height="${svgH}" viewBox="0 0 52 ${svgH}">
+          <line x1="26" y1="${qY(qs[0],topQ)}" x2="26" y2="${qY(qs[2],topQ)}"
+            stroke="${clr}" stroke-width="2.5"/>
+          <circle cx="26" cy="${qY(ctrl,topQ)}" r="8"
+            fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <line x1="16" y1="${qY(sw1,topQ)-9}" x2="36" y2="${qY(sw1,topQ)+9}"
+            stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="36" y1="${qY(sw1,topQ)-9}" x2="16" y2="${qY(sw1,topQ)+9}"
+            stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="16" y1="${qY(sw2,topQ)-9}" x2="36" y2="${qY(sw2,topQ)+9}"
+            stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="36" y1="${qY(sw2,topQ)-9}" x2="16" y2="${qY(sw2,topQ)+9}"
+            stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>`;
+      }
+      html+=`<div style="position:absolute;left:${left}px;top:${topY}px;">${svg}</div>`;
+
+    // ── 2 QUBITS ──────────────────────────────────────────────
+    } else if(g.q2!==undefined){
+      const topQ=Math.min(g.q,g.q2), botQ=Math.max(g.q,g.q2);
+      const topY=topQ*ROW_HEIGHT;
+      const svgH=(botQ-topQ)*ROW_HEIGHT+ROW_HEIGHT;
+      const clr=g.bg||'#007070';
+      const ctrlQ=g.ctrlQ!==undefined?g.ctrlQ:topQ;
+      const tgtQ =g.tgtQ !==undefined?g.tgtQ :botQ;
+      const ctrlY=qY(ctrlQ,topQ), tgtY=qY(tgtQ,topQ);
+      const ly1=Math.min(ctrlY,tgtY), ly2=Math.max(ctrlY,tgtY);
+      let svg='';
+
+      if(g.id==='CX'){
+        svg=`<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
+          <line x1="24" y1="${ly1}" x2="24" y2="${ly2}"
+            stroke="${clr}" stroke-width="2.5"/>
+          <circle cx="24" cy="${ctrlY}" r="8"
+            fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <circle cx="24" cy="${tgtY}" r="14"
+            fill="none" stroke="${clr}" stroke-width="2.5"/>
+          <line x1="16" y1="${tgtY}" x2="32" y2="${tgtY}"
+            stroke="${clr}" stroke-width="2"/>
+          <line x1="24" y1="${tgtY-10}" x2="24" y2="${tgtY+10}"
+            stroke="${clr}" stroke-width="2"/>
+        </svg>`;
+      } else if(g.id==='CZ'){
+        svg=`<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
+          <line x1="24" y1="${ly1}" x2="24" y2="${ly2}"
+            stroke="${clr}" stroke-width="2.5"/>
+          <circle cx="24" cy="${ctrlY}" r="8"
+            fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <circle cx="24" cy="${tgtY}" r="8"
+            fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+        </svg>`;
+      } else if(g.id==='SWAP'){
+        svg=`<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
+          <line x1="24" y1="${ly1}" x2="24" y2="${ly2}"
+            stroke="${clr}" stroke-width="2.5"/>
+          <line x1="14" y1="${ctrlY-9}" x2="34" y2="${ctrlY+9}"
+            stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="34" y1="${ctrlY-9}" x2="14" y2="${ctrlY+9}"
+            stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="14" y1="${tgtY-9}"  x2="34" y2="${tgtY+9}"
+            stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="34" y1="${tgtY-9}"  x2="14" y2="${tgtY+9}"
+            stroke="${clr}" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>`;
+      } else {
+        const sym=g.sym||g.id; const fs=sym.length<=2?13:sym.length===3?11:9;
+        const boxY=tgtY-19;
+        svg=`<svg width="48" height="${svgH}" viewBox="0 0 48 ${svgH}">
+          <line x1="24" y1="${ly1}" x2="24" y2="${ly2}"
+            stroke="${clr}" stroke-width="2.5"/>
+          <circle cx="24" cy="${ctrlY}" r="8"
+            fill="${clr}" stroke="rgba(255,255,255,.9)" stroke-width="1.5"/>
+          <rect x="4" y="${boxY}" width="40" height="38" rx="6"
+            fill="${clr}" stroke="rgba(255,255,255,.28)" stroke-width="1.4" fill-opacity=".85"/>
+          <rect x="6" y="${boxY+2}" width="36" height="4" rx="4" fill="rgba(255,255,255,.18)"/>
+          <text x="24" y="${tgtY+fs/3}" text-anchor="middle"
+            font-family="JetBrains Mono,monospace"
+            font-size="${fs}" font-weight="bold" fill="white">${escH(sym)}</text>
+        </svg>`;
+      }
+      html+=`<div style="position:absolute;left:${left}px;top:${topY}px;">${svg}</div>`;
+
+    // ── 1 QUBIT ────────────────────────────────────────────────
+    } else {
+      const yPos=g.q*ROW_HEIGHT, clr=g.bg||'#1a4a8a';
+      const sym=g.sym||g.id||'?';
+      const display=sym.length>4?sym.slice(0,3):sym;
+      const fs=display.length<=2?13:display.length===3?11:9;
+
+      if(g.id==='M'){
+        html+=`<div style="position:absolute;left:${left}px;top:${yPos+ROW_HEIGHT/2}px;transform:translateY(-50%);">
+          <svg width="44" height="38" viewBox="0 0 44 38">
+            <rect x="1" y="1" width="42" height="36" rx="6"
+              fill="rgba(109,76,65,.3)" stroke="#6d4c41" stroke-width="1.8"/>
+            <rect x="3" y="3" width="38" height="4" rx="4" fill="rgba(255,255,255,.12)"/>
+            <path d="M 8 30 A 14 14 0 0 1 36 30"
+              fill="none" stroke="#ff9580" stroke-width="1.8" stroke-linecap="round"/>
+            <line x1="22" y1="30" x2="32" y2="14"
+              stroke="#ff9580" stroke-width="1.6" stroke-linecap="round"/>
+            <circle cx="22" cy="30" r="2.5" fill="#ff9580"/>
+          </svg>
+        </div>`;
+      } else {
+        html+=`<div style="position:absolute;left:${left}px;top:${yPos+ROW_HEIGHT/2}px;transform:translateY(-50%);">
+          <svg width="44" height="38" viewBox="0 0 44 38">
+            <defs>
+              <linearGradient id="gq${g.col}_${g.q}" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="${clr}" stop-opacity=".95"/>
+                <stop offset="100%" stop-color="${clr}" stop-opacity=".6"/>
+              </linearGradient>
+            </defs>
+            <rect x="1" y="1" width="42" height="36" rx="6"
+              fill="url(#gq${g.col}_${g.q})" stroke="rgba(255,255,255,.3)" stroke-width="1.4"/>
+            <rect x="3" y="3" width="38" height="4" rx="4" fill="rgba(255,255,255,.2)"/>
+            <text x="22" y="${19+fs/3}" text-anchor="middle"
+              font-family="JetBrains Mono,monospace"
+              font-size="${fs}" font-weight="bold" fill="white">${escH(display)}</text>
+          </svg>
+        </div>`;
+      }
+    }
+  });
+
+  html+='</div>';
+  return `<div style="padding:.45rem .55rem .7rem;background:#020c18;border-top:1px solid rgba(0,136,255,.1);overflow-x:auto;">
+    <div style="font-family:var(--orb);font-size:.4rem;color:var(--mu);padding:.1rem 0 .42rem;letter-spacing:.06em;">⚛ CIRCUITO CUÁNTICO</div>
+    ${html}
+  </div>`;
+}
+
 
 function buildProbsOut(probs,shots,sim){
   const entries=Object.entries(probs).sort((a,b)=>b[1]-a[1]);
   if(!entries.length)return'';
   const total=entries.reduce((s,[,v])=>s+v,0);
   const rows=entries.map(([st,v])=>{
+    // v puede ser count (int) o probability (float)
     const isCount=v>1;
     const prob=isCount?v/total:v;
     const count=isCount?v:Math.round(v*shots);
@@ -962,6 +1207,7 @@ function buildHistogramOut(probs, shots){
     const barW=Math.min(40,chartW/entries.length-8);
     const maxVal=Math.max(...entries.map(([,v])=>v));
     ctx.clearRect(0,0,w,h);
+    // Grid
     ctx.strokeStyle='rgba(255,255,255,0.08)';
     ctx.lineWidth=0.5;
     for(let i=0;i<=4;i++){
@@ -971,6 +1217,7 @@ function buildHistogramOut(probs, shots){
       ctx.lineTo(w-padRight,y);
       ctx.stroke();
     }
+    // Barras
     entries.forEach(([st,v],i)=>{
       const x=padLeft+i*(barW+8)+8;
       const barH=(v/maxVal)*chartH;
@@ -984,10 +1231,12 @@ function buildHistogramOut(probs, shots){
       ctx.font='9px JetBrains Mono,monospace';
       ctx.textAlign='center';
       ctx.fillText(st,x+barW/2,padTop+chartH+15);
+      // Valor encima
       ctx.fillStyle='#e2ecff';
       ctx.font='bold 8px JetBrains Mono,monospace';
       ctx.fillText(v>1?v:v.toFixed(2),x+barW/2,y-3);
     });
+    // Ejes
     ctx.strokeStyle='rgba(255,255,255,0.3)';
     ctx.lineWidth=1;
     ctx.beginPath();
@@ -1003,6 +1252,7 @@ function buildHistogramOut(probs, shots){
 }
 
 function buildBlochOut(probs){
+  // Calcular estados de Bloch por qubit desde los counts/probs
   const qubits=Object.keys(probs)[0]?.length||0;
   if(qubits===0)return'';
   const total=Object.values(probs).reduce((s,v)=>s+v,0);
@@ -1041,16 +1291,20 @@ function drawBlochSphere(canvasId,theta,qi){
   const r=Math.min(w,h)*0.40;
   ctx.clearRect(0,0,w,h);
 
+  // Fondo con gradiente radial
   const bg=ctx.createRadialGradient(cx-r*.15,cy-r*.15,r*.05,cx,cy,r*1.15);
   bg.addColorStop(0,'#0d1e36');bg.addColorStop(.7,'#061020');bg.addColorStop(1,'#030810');
   ctx.beginPath();ctx.arc(cx,cy,r*1.05,0,Math.PI*2);ctx.fillStyle=bg;ctx.fill();
 
+  // Círculo exterior (esfera)
   ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);
   ctx.strokeStyle='rgba(0,170,255,.5)';ctx.lineWidth=1.8;ctx.stroke();
 
+  // Meridiano ecuador (elipse horizontal)
   ctx.beginPath();ctx.ellipse(cx,cy,r,r*.3,0,0,Math.PI*2);
   ctx.strokeStyle='rgba(0,170,255,.3)';ctx.lineWidth=1.2;ctx.stroke();
 
+  // Paralelos (latitudes)
   [-0.7,-0.35,0.35,0.7].forEach(f=>{
     const ry=r*Math.sqrt(1-f*f);
     const py=cy+r*f*0.95;
@@ -1058,9 +1312,11 @@ function drawBlochSphere(canvasId,theta,qi){
     ctx.strokeStyle=`rgba(0,136,255,${f===0?0.25:0.1})`;ctx.lineWidth=.7;ctx.stroke();
   });
 
+  // Meridiano vertical (elipse vertical)
   ctx.beginPath();ctx.ellipse(cx,cy,r*.25,r,0,0,Math.PI*2);
   ctx.strokeStyle='rgba(0,170,255,.15)';ctx.lineWidth=.7;ctx.stroke();
 
+  // Ejes con flechas
   function drawAxis(x1,y1,x2,y2,col,dashed=false){
     ctx.beginPath();
     if(dashed)ctx.setLineDash([3,4]);
@@ -1073,20 +1329,24 @@ function drawBlochSphere(canvasId,theta,qi){
   drawAxis(cx,cy,cx+r*1.05,cy,'rgba(0,200,255,.2)');
   drawAxis(cx,cy,cx-r*0.9,cy,'rgba(0,200,255,.12)',true);
 
+  // Vector de estado
   const phi=0;
   const vx=r*Math.sin(theta)*Math.cos(phi);
   const vy=-r*Math.cos(theta);
 
+  // Proyección sombra (en el ecuador)
   ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+vx,cy);
   ctx.strokeStyle='rgba(0,255,221,.15)';ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.stroke();ctx.setLineDash([]);
   ctx.beginPath();ctx.moveTo(cx+vx,cy);ctx.lineTo(cx+vx,cy+vy);
   ctx.strokeStyle='rgba(0,255,221,.12)';ctx.lineWidth=1;ctx.setLineDash([2,4]);ctx.stroke();ctx.setLineDash([]);
 
+  // Vector principal con gradiente luminoso
   const vg=ctx.createLinearGradient(cx,cy,cx+vx,cy+vy);
   vg.addColorStop(0,'rgba(0,255,221,.4)');vg.addColorStop(.6,'rgba(0,255,221,.9)');vg.addColorStop(1,'#ffffff');
   ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+vx,cy+vy);
   ctx.strokeStyle=vg;ctx.lineWidth=2.8;ctx.stroke();
 
+  // Punta de flecha
   const ang=Math.atan2(vy,vx);const al=9;
   ctx.beginPath();
   ctx.moveTo(cx+vx,cy+vy);
@@ -1094,10 +1354,12 @@ function drawBlochSphere(canvasId,theta,qi){
   ctx.lineTo(cx+vx-al*Math.cos(ang+0.42),cy+vy-al*Math.sin(ang+0.42));
   ctx.closePath();ctx.fillStyle='#00ffdd';ctx.fill();
 
+  // Punto brillante en la punta
   const pdg=ctx.createRadialGradient(cx+vx,cy+vy,0,cx+vx,cy+vy,6);
   pdg.addColorStop(0,'#ffffff');pdg.addColorStop(.4,'#00ffdd');pdg.addColorStop(1,'rgba(0,255,221,0)');
   ctx.beginPath();ctx.arc(cx+vx,cy+vy,6,0,Math.PI*2);ctx.fillStyle=pdg;ctx.fill();
 
+  // Etiquetas
   const fs=w>130?12:10;
   ctx.font=`bold ${fs}px JetBrains Mono,monospace`;
   ctx.fillStyle='rgba(180,220,255,.95)';ctx.textAlign='center';
@@ -1175,6 +1437,7 @@ async function runCell(id){
   running=false;
   if(rbtn)rbtn.classList.remove('spinning');
   renderCellNum(id);
+  // Forzar re-render para mostrar errorLine si existe
   if(cell.errorLine) renderCells();
 }
 function renderCellNum(id){const cell=cells.find(c=>c.id===id);if(!cell)return;const el=document.querySelector(`[data-id="${id}"] .cell-num`);if(el)el.textContent=cell.exec_count!==null?`[${cell.exec_count}]`:'[ ]';}
@@ -1370,6 +1633,8 @@ function buildAddRow(idx){
 
 // ── HIGHLIGHT — tokenizador seguro, nunca inyecta class= en el textarea ──
 function highlight(code, isQk=false){
+  // Trabaja sobre el texto RAW, nunca sobre HTML ya procesado
+  // Cada token se procesa una sola vez, sin riesgo de doble-wrap
   const KW=new Set(['import','from','as','def','class','return','if','else','elif',
     'for','while','in','not','and','or','True','False','None','with','try','except',
     'finally','lambda','pass','break','continue','yield','raise','del','global',
@@ -1383,11 +1648,13 @@ function highlight(code, isQk=false){
     'transpile','plot_histogram','plot_bloch_multivector','plot_state_city',
     'UnitaryGate','SparsePauliOp','Parameter','ParameterVector']);
 
+  // Regex de tokenización — grupos mutuamente excluyentes
   const RE=/(#[^\n]*)|("""[\s\S]*?"""|'''[\s\S]*?''')|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|\b(\d+(?:\.\d+)?(?:[eEjJ][+-]?\d+)?)\b|(@[A-Za-z_][A-Za-z0-9_.]*)|([A-Za-z_]\w*)/g;
 
   let out='', last=0, m;
   RE.lastIndex=0;
   while((m=RE.exec(code))!==null){
+    // texto plano entre tokens → escapar y añadir
     if(m.index>last) out+=esc(code.slice(last,m.index));
     const [tok,cmt,strT,strS,num,dec,word]=m;
     if     (cmt !==undefined) out+=`<s class="cmt">${esc(cmt)}</s>`;
@@ -1407,6 +1674,7 @@ function highlight(code, isQk=false){
   }
   if(last<code.length) out+=esc(code.slice(last));
   return out;
+  // Helper inline — no usa escH para no añadir dependencia circular
   function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 }
 
@@ -1436,6 +1704,7 @@ function buildCellEl(cell,i){
 
   const execLbl=cell.exec_count!==null?`[${cell.exec_count}]`:'[ ]';
 
+  // Toolbar
   const toolbar=_expositionMode
     ?`<div class="cell-toolbar">${isCode?`<button class="ct-btn ct-run" onclick="event.stopPropagation();runCell('${cell.id}')" title="Ejecutar">▶</button>`:''}
       </div>`
@@ -1489,6 +1758,7 @@ function buildCellEl(cell,i){
         ${restoreBtn}
       </div>`;
   } else {
+    // Markdown
     if(cell.mdEdit&&!_expositionMode){
       el.innerHTML=`${toolbar}
         <div class="cell-gutter"><div class="cell-num" style="color:var(--gr)">Md</div></div>
@@ -1540,7 +1810,7 @@ function onCellInput(id){
     const cell=cells.find(c=>c.id===id);
     if(cell){
       cell.code=ta.value;
-      cell.errorLine=null;
+      cell.errorLine=null; // limpiar error al editar
     }
     const isQk=cell?.type==='qiskit';
     syn.innerHTML=highlight(ta.value,isQk)+'\n';
@@ -1568,6 +1838,7 @@ function onCellKeydown(e,id){
   if(e.key==='Tab'){e.preventDefault();const s=ta.selectionStart,en=ta.selectionEnd;ta.value=ta.value.substring(0,s)+'    '+ta.value.substring(en);ta.selectionStart=ta.selectionEnd=s+4;onCellInput(id);return;}
   if(e.shiftKey&&e.key==='Enter'){e.preventDefault();runCell(id);const idx=cells.findIndex(c=>c.id===id);if(idx<cells.length-1)focusCell(cells[idx+1].id);else if(!_expositionMode)addCellAt(-1,'code');return;}
   if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();runCell(id);}
+  // Navegación entre celdas
   if(e.ctrlKey&&e.key==='ArrowUp'){
     e.preventDefault();
     const idx=cells.findIndex(c=>c.id===id);
@@ -1592,6 +1863,7 @@ function onMdKeydown(e,id){
   if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();syncCellCode(id);const cell=cells.find(c=>c.id===id);if(cell){cell.mdEdit=false;renderCells();}const idx=cells.findIndex(c=>c.id===id);if(idx<cells.length-1)focusCell(cells[idx+1].id);}
 }
 
+// Navegación global con flechas cuando no se edita
 window.addEventListener('keydown', e => {
   if (!curCellId) return;
   if (document.activeElement.tagName === 'TEXTAREA') return;
@@ -1639,6 +1911,7 @@ function showUI(user){
 window.addEventListener('message',e=>{
   const d=e.data||{};
 
+  // Usuario
   if(d.type==='QCOL_USER'||d.type==='QCOL_USER_UPDATE'){
     const role=d.user?.role||'guest';
     if(role==='admin'||role==='founder') showUI(d.user);
@@ -1649,6 +1922,7 @@ window.addEventListener('message',e=>{
     if(url){ engineURL=url; checkEngine(); }
   }
 
+  // Notebook desde Proyectos — soporta ambos tipos de mensaje
   const isOpenExpo = d.type==='QCOL_OPEN_NB_EXPOSITION';
   const isLoadNb   = (d.type==='QCOL_LOAD_NB') && d.nb;
 
@@ -1657,13 +1931,16 @@ window.addEventListener('message',e=>{
     const isExpo = isOpenExpo || !!d.expositionMode;
 
     if(!nb){ notify('❌ Notebook sin datos'); return; }
+    // En modo exposición cualquier usuario puede ver
     if(!isExpo && !requireAuth()) return;
 
+    // Cargar celdas
     document.getElementById('nb-name-inp').value = nb.title||nb.name||'Sin título';
     cells = (nb.cells && nb.cells.length > 0)
       ? nb.cells.map(c=>({...c, id:genId(), output:'', exec_count:null, mdEdit:false, errorLine:null}))
       : [];
 
+    // Mostrar UI para invitados en modo expo
     if(isExpo){
       _initialized = true;
       curUser = curUser || {name:'Invitado', role:'guest'};
@@ -1675,10 +1952,14 @@ window.addEventListener('message',e=>{
 
     setView('notebook');
 
+    // Orden importante: primero establecer _expositionMode, luego renderCells
+    // para que buildCellEl genere el HTML correcto desde el primer render
     if(isExpo){
+      // Seteamos el flag ANTES de renderizar
       _expositionMode = true;
       _originalCells  = JSON.parse(JSON.stringify(cells));
       document.body.classList.add('expo-mode');
+      // Botones
       document.getElementById('expo-badge').style.display='inline-flex';
       ['btn-add-code','btn-add-qk','btn-add-md','btn-import',
        'btn-download','btn-save','btn-publish','stab-2'].forEach(id=>{
@@ -1687,10 +1968,12 @@ window.addEventListener('message',e=>{
       const rst=document.getElementById('btn-restore-all'); if(rst) rst.style.display='';
       const ni=document.getElementById('nb-name-inp');
       if(ni){ ni.readOnly=true; ni.style.opacity='.6'; }
+      // Ahora renderizamos — buildCellEl verá _expositionMode=true
       renderCells();
       if(cells[0]) focusCell(cells[0].id);
       notify('👁 Modo exposición — lee el material y experimenta con el código');
     } else {
+      // Modo normal
       _expositionMode = false;
       document.body.classList.remove('expo-mode');
       document.getElementById('expo-badge').style.display='none';
@@ -1708,6 +1991,7 @@ window.addEventListener('message',e=>{
   }
 });
 
+// Escuchar cambios en localStorage (cuando Fundador cambia URL)
 window.addEventListener('storage',e=>{
   if(e.key==='qcol_colab_url'&&e.newValue){
     engineURL=e.newValue;
@@ -1715,6 +1999,7 @@ window.addEventListener('storage',e=>{
   }
 });
 
+// Pedir usuario
 postCore('QCOL_GET_USER');
 setTimeout(()=>{if(!_initialized){try{const s=localStorage.getItem('qcol_cur_user');if(s)showUI(JSON.parse(s));}catch(e){}}},700);
 setTimeout(()=>{if(!_initialized){document.getElementById('access-denied').classList.add('show');document.getElementById('topbar').style.display='flex';_initialized=true;}},3000);
@@ -1722,6 +2007,7 @@ window.addEventListener('message',e=>{const d=e.data||{};if(d.type==='QCOL_USER_
 
 function requireAuth(){const role=curUser?.role||'guest';if(role!=='admin'&&role!=='founder'&&!_expositionMode){notify('❌ Requiere cuenta Admin o Founder');postCore('QCOL_LOGIN');return false;}return true;}
 
+// Init
 function initEngine(){const s=localStorage.getItem('qcol_colab_url');if(s){engineURL=s;checkEngine();}}
 initEngine();
 setTimeout(()=>initMarkdown(),400);
