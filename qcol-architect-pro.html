@@ -403,15 +403,7 @@ s.blt{color:#ffb86c;}
 <body>
 <div class="notif" id="notif"></div>
 
-<div class="access-denied" id="access-denied">
-  <div class="denied-icon">🔒</div>
-  <div class="denied-title">ACCESO RESTRINGIDO</div>
-  <div class="denied-desc">Quantum Notebook es exclusivo para<br>
-    <strong style="color:var(--cy);">Administradores</strong> y el
-    <strong style="color:var(--yw);">Fundador</strong>.
-  </div>
-  <button class="btn-nav-back" style="margin-top:.5rem;" onclick="postCore('QCOL_NAV',{screen:'home'})">← Volver al menú</button>
-</div>
+<div class="access-denied" id="access-denied" style="display:none!important;"></div>
 
 <div class="topbar" id="topbar" style="display:none;">
   <button class="btn-nav-back" id="btn-back" onclick="goBack()">← ATRÁS</button>
@@ -1885,25 +1877,22 @@ window.addEventListener('keydown', e => {
 // ── SHOW UI ────────────────────────────────────────────────────
 function showUI(user){
   const role=user?.role||'guest';
-  const alreadyOK=_initialized&&(curUser?.role==='admin'||curUser?.role==='founder');
-  const sameUser=alreadyOK&&curUser?.username===user?.username;
+  const sameUser=_initialized&&curUser?.username===user?.username;
   if(sameUser)return;
   _initialized=true;curUser=user;
-  if(role!=='admin'&&role!=='founder'&&!_expositionMode){
-    document.getElementById('access-denied').classList.add('show');
-    ['topbar','secbar','main-area','statusbar'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
-    return;
-  }
+  // Quantum Notebook abierto a todos los roles
   document.getElementById('access-denied').classList.remove('show');
   ['topbar','secbar','main-area','statusbar'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='flex';});
-  if(user&&(role==='admin'||role==='founder')){
+  if(user){
     const pill=document.getElementById('user-pill');
-    if(pill)pill.textContent=(role==='founder'?'👑 ':'🔑 ')+(user.name||'—').split(' ')[0];
-    const ap=document.getElementById('admin-pill');if(ap)ap.style.display='';
+    const roleIcon = role==='founder'?'👑':role==='admin'?'🔑':role==='user'?'👤':'👁';
+    if(pill)pill.textContent=roleIcon+' '+(user.name||'—').split(' ')[0];
+    const ap=document.getElementById('admin-pill');
+    if(ap)ap.style.display=(role==='admin'||role==='founder')?'':'none';
   }
   const stored=localStorage.getItem('qcol_colab_url')||'';
   if(stored){engineURL=stored;checkEngine();}
-  if(role==='admin'||role==='founder')refreshNbs();
+  refreshNbs();
   if(cells.length===0&&!_expositionMode)addCellAt(-1,'qiskit');
 }
 
@@ -1913,9 +1902,9 @@ window.addEventListener('message',e=>{
 
   // Usuario
   if(d.type==='QCOL_USER'||d.type==='QCOL_USER_UPDATE'){
-    const role=d.user?.role||'guest';
-    if(role==='admin'||role==='founder') showUI(d.user);
-    else if(!d.user){ _initialized=false; showUI(null); }
+    // Aceptar cualquier rol
+    if(d.user) showUI(d.user);
+    else { _initialized=false; showUI({name:'Invitado',role:'guest'}); }
   }
   if(d.type==='QCOL_CONFIG_UPDATED'){
     const url=localStorage.getItem('qcol_colab_url');
@@ -2002,10 +1991,10 @@ window.addEventListener('storage',e=>{
 // Pedir usuario
 postCore('QCOL_GET_USER');
 setTimeout(()=>{if(!_initialized){try{const s=localStorage.getItem('qcol_cur_user');if(s)showUI(JSON.parse(s));}catch(e){}}},700);
-setTimeout(()=>{if(!_initialized){document.getElementById('access-denied').classList.add('show');document.getElementById('topbar').style.display='flex';_initialized=true;}},3000);
-window.addEventListener('message',e=>{const d=e.data||{};if(d.type==='QCOL_USER_UPDATE'){const role=d.user?.role||'guest';if(role==='admin'||role==='founder'){_initialized=false;showUI(d.user);}}});
+setTimeout(()=>{if(!_initialized){showUI({name:'Invitado',role:'guest'});}},1500);
+window.addEventListener('message',e=>{const d=e.data||{};if(d.type==='QCOL_USER_UPDATE'&&d.user){_initialized=false;showUI(d.user);}});
 
-function requireAuth(){const role=curUser?.role||'guest';if(role!=='admin'&&role!=='founder'&&!_expositionMode){notify('❌ Requiere cuenta Admin o Founder');postCore('QCOL_LOGIN');return false;}return true;}
+function requireAuth(){return true;} // Quantum Notebook abierto a todos
 
 // Init
 function initEngine(){const s=localStorage.getItem('qcol_colab_url');if(s){engineURL=s;checkEngine();}}
