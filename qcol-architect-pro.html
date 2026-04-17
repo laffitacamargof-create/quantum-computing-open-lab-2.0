@@ -289,6 +289,10 @@ body.expo-mode .nb-cell[data-ctype="code"] .cell-restore-btn{display:block;}
   display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .18s;}
 .add-cell-row:hover{opacity:1;}
 body.expo-mode .add-cell-row{display:none;}
+/* ── EXPO MODE: secbar completamente oculta ── */
+body.expo-mode #secbar{display:none!important;}
+body.expo-mode #btn-import{display:none!important;}
+/* Solo queda btn-back en topbar, que va a proyectos */
 .add-cell-line{flex:1;height:1px;background:rgba(0,255,221,.15);}
 .add-cell-btns{display:flex;gap:.2rem;padding:0 .4rem;}
 .add-btn{padding:.09rem .36rem;background:var(--bg);border:1px solid rgba(0,255,221,.25);
@@ -510,7 +514,7 @@ function genId(){return 'c'+Date.now()+Math.random().toString(36).slice(2,6);}
 // ── NAVEGACIÓN ────────────────────────────────────────────────
 function goBack(){
   if(_expositionMode){
-    deactivateExpositionMode();
+    // En modo exposición: volver a proyectos sin deactivar (el core maneja el nav)
     postCore('QCOL_NAV',{screen:'projects'});
   } else {
     postCore('QCOL_NAV',{screen:'home'});
@@ -522,15 +526,22 @@ function activateExpositionMode(){
   _expositionMode=true;
   _originalCells=JSON.parse(JSON.stringify(cells));
   document.body.classList.add('expo-mode');
+  // Ocultar expo-badge ya que la secbar entera se oculta
   document.getElementById('expo-badge').style.display='inline-flex';
+  // Ocultar secbar completa — en expo solo se usa el botón ← ATRÁS del topbar
+  const secbar=document.getElementById('secbar');
+  if(secbar)secbar.style.display='none';
+  // Ocultar botones individuales por si acaso
   ['btn-add-code','btn-add-qk','btn-add-md','btn-import',
    'btn-download','btn-save','btn-publish','stab-2'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.style.display='none';
   });
   const rst=document.getElementById('btn-restore-all');if(rst)rst.style.display='';
   const ni=document.getElementById('nb-name-inp');if(ni){ni.readOnly=true;ni.style.opacity='.6';}
-  // CRÍTICO: re-renderizar para que todas las celdas Markdown queden en modo lectura
-  // y las celdas de código pierdan doble-click y toolbar de edición
+  // Cambiar texto del botón atrás para indicar que va a Proyectos
+  const btnBack=document.getElementById('btn-back');
+  if(btnBack){btnBack.textContent='← PROYECTOS';btnBack.title='Volver a Proyectos';}
+  // Renderizar con _expositionMode=true para que buildCellEl genere HTML correcto
   renderCells();
   notify('👁 Modo exposición — lee el material y experimenta con el código');
 }
@@ -538,12 +549,19 @@ function deactivateExpositionMode(){
   _expositionMode=false;_originalCells=null;
   document.body.classList.remove('expo-mode');
   document.getElementById('expo-badge').style.display='none';
+  // Restaurar secbar
+  const secbar=document.getElementById('secbar');
+  if(secbar)secbar.style.display='flex';
+  // Restaurar botones
   ['btn-add-code','btn-add-qk','btn-add-md','btn-import',
    'btn-download','btn-save','btn-publish','stab-2'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.style.display='';
   });
   const rst=document.getElementById('btn-restore-all');if(rst)rst.style.display='none';
   const ni=document.getElementById('nb-name-inp');if(ni){ni.readOnly=false;ni.style.opacity='';}
+  // Restaurar texto del botón atrás
+  const btnBack=document.getElementById('btn-back');
+  if(btnBack){btnBack.textContent='← ATRÁS';btnBack.title='';}
   renderCells();
 }
 function restoreAllCells(){
@@ -1957,6 +1975,11 @@ window.addEventListener('message',e=>{
       const rst=document.getElementById('btn-restore-all'); if(rst) rst.style.display='';
       const ni=document.getElementById('nb-name-inp');
       if(ni){ ni.readOnly=true; ni.style.opacity='.6'; }
+      // Ocultar secbar directamente con JS (doble seguridad además del CSS)
+      const sb=document.getElementById('secbar');if(sb)sb.style.display='none';
+      // Cambiar texto del botón atrás
+      const bb=document.getElementById('btn-back');
+      if(bb){bb.textContent='← PROYECTOS';bb.title='Volver a Proyectos';}
       // Ahora renderizamos — buildCellEl verá _expositionMode=true
       renderCells();
       if(cells[0]) focusCell(cells[0].id);
