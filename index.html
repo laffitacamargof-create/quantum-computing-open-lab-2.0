@@ -773,6 +773,25 @@ body::before{content:'';position:fixed;inset:0;
   // ── MENSAJERÍA INTER-MÓDULO ──
   window.addEventListener('message', e => {
     const d = e.data; if (!d?.type) return;
+
+    // ═══ REENVÍO A QUANTUM NOTEBOOK (MODO EXPOSICIÓN) ═══
+    if (d.type === 'QCOL_OPEN_NB_EXPOSITION') {
+      const notebookFrame = iframes['architect-pro'];
+      if (notebookFrame && notebookFrame.contentWindow) {
+        notebookFrame.contentWindow.postMessage(d, '*');
+      } else {
+        // Reintentar tras breve retraso si el iframe aún no está listo
+        setTimeout(() => {
+          const retryFrame = iframes['architect-pro'];
+          if (retryFrame && retryFrame.contentWindow) {
+            retryFrame.contentWindow.postMessage(d, '*');
+          }
+        }, 300);
+      }
+      return;
+    }
+
+    // ── Resto del código original sin cambios ──
     if (d.type === 'QCOL_NAV')          nav(d.screen);
     if (d.type === 'QCOL_NOTIFY')       notify(d.msg);
     if (d.type === 'QCOL_LOGIN')        openAuth('login');
