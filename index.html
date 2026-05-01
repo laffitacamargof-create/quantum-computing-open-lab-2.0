@@ -603,8 +603,8 @@ body::before{content:'';position:fixed;inset:0;
     </div>
   </div>
 
-  <!-- NUEVO MÓDULO: MODULE LAB -->
-  <div class="screen" id="screen-module-lab">
+  <!-- NUEVO MÓDULO: QUANTUM PUZZLE (antes MODULE LAB) -->
+  <div class="screen" id="screen-quantum-puzzle">
     <div class="screen-hdr">
       <button class="btn-back" onclick="QCOL.nav('home')">← MENÚ</button>
       <div class="screen-title">
@@ -614,7 +614,7 @@ body::before{content:'';position:fixed;inset:0;
           <circle cx="12" cy="15" r="2" stroke="#ffd700" stroke-width="1.5"/>
           <path d="M4 20L12 15L20 20" stroke="#ffd700" stroke-width="1.5"/>
         </svg>
-        🛠️ MODULE LAB
+        🧩 QUANTUM PUZZLE
       </div>
       <button class="hbtn ai-btn" onclick="QCOL.toggleAI()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="vertical-align:middle;margin-right:3px;">
@@ -625,8 +625,8 @@ body::before{content:'';position:fixed;inset:0;
         QuantumChat
       </button>
     </div>
-    <div class="module-iframe-wrap" id="module-lab-wrap">
-      <div id="module-lab-ph"></div>
+    <div class="module-iframe-wrap" id="quantum-puzzle-wrap">
+      <div id="quantum-puzzle-ph"></div>
     </div>
   </div>
 
@@ -650,7 +650,7 @@ body::before{content:'';position:fixed;inset:0;
     account:        'qcol-account.html',
     founder:        'qcol-founder.html',
     help:           'qcol-help.html',
-    'module-lab':   'qcol-module-lab.html',   // Nuevo módulo
+    'quantum-puzzle':'qcol-quantum-puzzle.html',   // Nuevo módulo Quantum Puzzle
   };
 
   let curUser = null;
@@ -662,79 +662,47 @@ body::before{content:'';position:fixed;inset:0;
   let cmEditor = null;
 
   // ══════════════════════════════════════════════
-  // BASE DE DATOS COMPARTIDA — GitHub como storage
+  // BASE DE DATOS LOCAL (localStorage) — SIN FIREBASE
   // ══════════════════════════════════════════════
-  const DB_PATH = 'data/qcol_db.json';
   let _db = null;
-  let _dbSyncing = false;
 
-  function getGH() {
-      return JSON.parse(localStorage.getItem('qcol_gh') || '{}');
-  }
-
-  async function dbLoad() {
-      const gh = getGH();
-      if (!gh.user || !gh.repo) return null;
-      try {
-          const ts = Date.now();
-          const url = `https://raw.githubusercontent.com/${gh.user}/${gh.repo}/main/${DB_PATH}?t=${ts}`;
-          const res = await fetch(url);
-          if (!res.ok) return null;
-          _db = await res.json();
-          return _db;
-      } catch(e) {
-          console.warn('dbLoad error:', e);
-          return null;
+  function dbLoad() {
+      const stored = localStorage.getItem('qcol_db');
+      if (stored) {
+          try {
+              _db = JSON.parse(stored);
+              return _db;
+          } catch(e) { console.warn('dbLoad parse error', e); }
       }
+      return null;
   }
 
-  async function dbSave(newData) {
-      if (_dbSyncing) return false;
-      _dbSyncing = true;
-      const gh = getGH();
-      if (!gh.token || !gh.user || !gh.repo) { _dbSyncing = false; return false; }
+  function dbSave(newData) {
       try {
-          const apiURL = `https://api.github.com/repos/${gh.user}/${gh.repo}/contents/${DB_PATH}`;
-          const headers = {
-              'Authorization': `token ${gh.token}`,
-              'Accept': 'application/vnd.github.v3+json',
-              'Content-Type': 'application/json'
-          };
-          let sha = null;
-          const check = await fetch(apiURL, { headers });
-          if (check.ok) { const j = await check.json(); sha = j.sha; }
-          
-          const content = btoa(unescape(encodeURIComponent(JSON.stringify(newData, null, 2))));
-          const body = { message: 'QCOL DB update', content };
-          if (sha) body.sha = sha;
-          
-          const res = await fetch(apiURL, {
-              method: 'PUT', headers,
-              body: JSON.stringify(body)
-          });
-          _dbSyncing = false;
-          return res.ok;
+          localStorage.setItem('qcol_db', JSON.stringify(newData));
+          _db = newData;
+          return true;
       } catch(e) {
-          console.error('dbSave error:', e);
-          _dbSyncing = false;
+          console.error('dbSave error', e);
           return false;
       }
   }
 
   async function dbGet(section) {
-      if (!_db) await dbLoad();
-      return _db?.[section] || null;
+      if (!_db) dbLoad();
+      if (!_db) return null;
+      return _db[section] || null;
   }
 
   async function dbSet(section, value) {
-      if (!_db) await dbLoad();
+      if (!_db) dbLoad();
       if (!_db) _db = { version:1, config:{}, users:[], circuits:{}, notebooks:{}, ai_history:{} };
       _db[section] = value;
       return dbSave(_db);
   }
 
   async function dbInit() {
-      const data = await dbLoad();
+      let data = dbLoad();
       if (!data) {
           const empty = {
               version: 1,
@@ -747,16 +715,16 @@ body::before{content:'';position:fixed;inset:0;
                   ignored_attrs: JSON.parse(localStorage.getItem('qcol_ignored_attrs') || '[]'),
                   ignored_attrs_reasons: JSON.parse(localStorage.getItem('qcol_ignored_attrs_reasons') || '{}')
               },
-              users: JSON.parse(localStorage.getItem('qcol_users') || '[]'),
+              users: [],
               circuits: {},
               notebooks: {},
               ai_history: {}
           };
           await dbSave(empty);
-          _db = empty;
+          data = empty;
       }
-      if (_db?.config) {
-          const c = _db.config;
+      if (data?.config) {
+          const c = data.config;
           if (c.colab_url)       localStorage.setItem('qcol_colab_url',         c.colab_url);
           if (c.mistral_key)     localStorage.setItem('qcol_mistral_key',        c.mistral_key);
           if (c.mistral_model)   localStorage.setItem('qcol_mistral_model',      c.mistral_model);
@@ -764,10 +732,7 @@ body::before{content:'';position:fixed;inset:0;
           if (c.ignored_attrs)   localStorage.setItem('qcol_ignored_attrs',      JSON.stringify(c.ignored_attrs));
           if (c.ignored_attrs_reasons) localStorage.setItem('qcol_ignored_attrs_reasons', JSON.stringify(c.ignored_attrs_reasons));
       }
-      if (_db?.users?.length) {
-          localStorage.setItem('qcol_users', JSON.stringify(_db.users));
-      }
-      broadcast({ type: 'QCOL_CONFIG_UPDATED', db: _db });
+      broadcast({ type: 'QCOL_CONFIG_UPDATED', db: data });
   }
 
   // ── MENSAJERÍA INTER-MÓDULO ──
@@ -776,27 +741,39 @@ body::before{content:'';position:fixed;inset:0;
 
     // ═══ REENVÍO A QUANTUM NOTEBOOK (MODO EXPOSICIÓN) ═══
     if (d.type === 'QCOL_OPEN_NB_EXPOSITION') {
-      const notebookFrame = iframes['architect-pro'];
-      if (notebookFrame && notebookFrame.contentWindow) {
-        notebookFrame.contentWindow.postMessage(d, '*');
-      } else {
-        // Reintentar tras breve retraso si el iframe aún no está listo
-        setTimeout(() => {
-          const retryFrame = iframes['architect-pro'];
-          if (retryFrame && retryFrame.contentWindow) {
-            retryFrame.contentWindow.postMessage(d, '*');
+      // 1. Navegar a la pantalla del Quantum Notebook (architect-pro)
+      nav('architect-pro');
+
+      // 2. Enviar el mensaje con el notebook al iframe
+      //    El iframe puede estar cargando por primera vez → esperar con retry
+      function sendExpoMsg() {
+        const nbFrame = iframes['architect-pro'];
+        if (nbFrame && nbFrame.contentWindow) {
+          nbFrame.contentWindow.postMessage(d, '*');
+          return true;
+        }
+        return false;
+      }
+
+      // Intentar inmediatamente (si el iframe ya estaba cargado)
+      if (!sendExpoMsg()) {
+        // Si no estaba listo, reintentar cada 200ms hasta 5s
+        let attempts = 0;
+        const retry = setInterval(() => {
+          attempts++;
+          if (sendExpoMsg()) {
+            clearInterval(retry);
+          } else if (attempts > 25) {
+            clearInterval(retry); // desistir tras 5s
           }
-        }, 300);
+        }, 200);
       }
       return;
     }
 
     // ═══ CELDA CIRCUIT: NOTEBOOK → ARCHITECT (abrir editor) ═══
-    // El Quantum Notebook pide abrir el Arquitecto para editar una celda circuito
     if (d.type === 'QCOL_OPEN_ARCHITECT_EDIT') {
-      // 1. Navegar a la pantalla del arquitecto
       nav('architect');
-      // 2. Reenviar el mensaje al arquitecto cuando esté listo
       const sendToArchitect = () => {
         const archFrame = iframes['architect'];
         if (archFrame && archFrame.contentWindow) {
@@ -804,30 +781,23 @@ body::before{content:'';position:fixed;inset:0;
         }
       };
       if (iframes['architect']) {
-        // Ya cargado — esperar un tick para que la pantalla sea visible
         setTimeout(sendToArchitect, 150);
       } else {
-        // Aún cargando — reintentar varias veces hasta que esté listo
         let attempts = 0;
         const retry = setInterval(() => {
           attempts++;
           if (iframes['architect'] && iframes['architect'].contentWindow) {
             clearInterval(retry);
             iframes['architect'].contentWindow.postMessage(d, '*');
-          } else if (attempts > 20) {
-            clearInterval(retry); // desistir tras 4s
-          }
+          } else if (attempts > 20) clearInterval(retry);
         }, 200);
       }
       return;
     }
 
     // ═══ CELDA CIRCUIT: ARCHITECT → NOTEBOOK (devolver datos) ═══
-    // El Arquitecto envía el código + circuitData al Quantum Notebook
     if (d.type === 'QCOL_CIRCUIT_RETURN') {
-      // Navegar de vuelta al Quantum Notebook
       nav('architect-pro');
-      // Reenviar los datos al Quantum Notebook
       const sendToNB = () => {
         const nbFrame = iframes['architect-pro'];
         if (nbFrame && nbFrame.contentWindow) {
@@ -843,15 +813,12 @@ body::before{content:'';position:fixed;inset:0;
           if (iframes['architect-pro'] && iframes['architect-pro'].contentWindow) {
             clearInterval(retry);
             iframes['architect-pro'].contentWindow.postMessage(d, '*');
-          } else if (attempts > 20) {
-            clearInterval(retry);
-          }
+          } else if (attempts > 20) clearInterval(retry);
         }, 200);
       }
       return;
     }
 
-    // ── Resto del código original sin cambios ──
     if (d.type === 'QCOL_NAV')          nav(d.screen);
     if (d.type === 'QCOL_NOTIFY')       notify(d.msg);
     if (d.type === 'QCOL_LOGIN')        openAuth('login');
@@ -868,7 +835,6 @@ body::before{content:'';position:fixed;inset:0;
     if (d.type === 'QCOL_SAVE') {
       const val = typeof d.val === 'object' ? JSON.stringify(d.val) : d.val;
       localStorage.setItem(d.key, val);
-      
       const CONFIG_KEYS = {
           'qcol_colab_url': 'colab_url',
           'qcol_mistral_key': 'mistral_key',
@@ -885,7 +851,6 @@ body::before{content:'';position:fixed;inset:0;
           _db.config[CONFIG_KEYS[d.key]] = parsedVal;
           dbSave(_db);
       }
-      
       if (d.key === 'qcol_colab_url') checkEngine();
       if (d.key === 'qcol_ai') { aiCfg = d.val; setupAI(); }
       if (d.key === 'qcol_fp') notify('✅ Contraseña fundador actualizada');
@@ -922,10 +887,19 @@ body::before{content:'';position:fixed;inset:0;
     }
     if (d.type === 'QCOL_GET_DB') {
         dbGet(d.section).then(data => {
-            if (data && d.section === 'users') {
-                localStorage.setItem('qcol_users', JSON.stringify(data));
-            }
             broadcast({ type: 'QCOL_DB_DATA', section: d.section, data });
+        });
+    }
+    if (d.type === 'QCOL_DEL_CIRCUIT' && d.username && d.index !== undefined) {
+        dbGet('circuits').then(circuits => {
+            const all = circuits || {};
+            if (d.index === -1) {
+                all[d.username] = [];
+            } else if (all[d.username]) {
+                all[d.username].splice(d.index, 1);
+            }
+            dbSet('circuits', all);
+            broadcast({ type: 'QCOL_DB_DATA', section: 'circuits', data: all });
         });
     }
   });
@@ -995,7 +969,7 @@ body::before{content:'';position:fixed;inset:0;
       account:        { icon:'👤', title:'MI CUENTA',              desc:'Tu perfil y circuitos guardados.' },
       founder:        { icon:'👑', title:'PANEL FUNDADOR',         desc:'Configuración y gestión del ecosistema.' },
       help:           { icon:'❓', title:'AYUDA',                  desc:'Guía de uso del ecosistema.' },
-      'module-lab':   { icon:'🔨🔧', title:'MODULE LAB',          desc:'Donde se decide cómo y qué piezas pueden formar parte para darle más valor al tablero. Proporciona herramientas para crear nuevos módulos con nuevas capacidades a los investigadores.' },
+      'quantum-puzzle':{ icon:'🧩', title:'QUANTUM PUZZLE',        desc:'Tienda de apps cuánticas: ejecuta programas reales en el compilador sin instalación.' },
     };
     const i = info[screen] || { icon:'📦', title:'MÓDULO', desc:'' };
     return `<div class="module-placeholder">
@@ -1056,9 +1030,7 @@ body::before{content:'';position:fixed;inset:0;
           </g></svg>`,
         title:'📓 QUANTUM NOTEBOOK', badge:'badge-pro', badgeTxt:'ADMIN+',
         desc:'Crea y edita Notebooks cuánticos completos. Exporta a .ipynb. Solo fundadores y administradores pueden publicar en Proyectos.',
-        delay:.15,
-        show: true,   // Ahora visible para todos, pero el texto aclara el permiso de publicación
-        locked: false,
+        delay:.15, show:true, locked: false,
       },
       {
         screen:'library',
@@ -1079,9 +1051,7 @@ body::before{content:'';position:fixed;inset:0;
           <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#00ccff" stroke-width="1.5" stroke-linecap="round"/>
         </svg>`,
         title:'MI CUENTA', badge:'', badgeTxt:'',
-        desc: curUser
-          ? `Bienvenido, ${curUser.name}. Circuitos guardados y configuración.`
-          : 'Inicia sesión para guardar tus circuitos e historial.',
+        desc: curUser ? `Bienvenido, ${curUser.name}. Circuitos guardados y configuración.` : 'Inicia sesión para guardar tus circuitos e historial.',
         delay:.25, show:true,
       },
       {
@@ -1103,8 +1073,7 @@ body::before{content:'';position:fixed;inset:0;
         </svg>`,
         title:'CONFIGURACIÓN', badge:'badge-admin', badgeTxt:'SISTEMA',
         desc:'Panel de control del ecosistema QCOL. Usuarios, compilador, IA y GitHub.',
-        delay:.3,
-        show: isF,
+        delay:.3, show: isF,
       },
       {
         screen:'help',
@@ -1116,17 +1085,17 @@ body::before{content:'';position:fixed;inset:0;
         desc:'Documentación completa, guías de inicio rápido y preguntas frecuentes sobre el ecosistema QCOL.',
         delay:.35, show:true,
       },
-      // NUEVA TARJETA: MODULE LAB
+      // NUEVA TARJETA: QUANTUM PUZZLE (antes Module Lab)
       {
-        screen:'module-lab',
+        screen:'quantum-puzzle',
         icon:`<svg width="26" height="26" viewBox="0 0 24 24" fill="none">
           <path d="M14.5 5.5L18.5 9.5M6.5 18.5L5.5 17.5M16.5 8.5L15.5 7.5" stroke="#ffd700" stroke-width="1.8" stroke-linecap="round"/>
           <path d="M8 2L16 8L20 20L4 20L8 2Z" stroke="#ffd700" stroke-width="1.8" fill="rgba(255,215,0,.05)"/>
           <circle cx="12" cy="15" r="2" stroke="#ffd700" stroke-width="1.5"/>
           <path d="M4 20L12 15L20 20" stroke="#ffd700" stroke-width="1.5"/>
         </svg>`,
-        title:'🛠️ MODULE LAB', badge:'badge-new', badgeTxt:'HERRAMIENTAS',
-        desc:'Donde se decide cómo y qué piezas pueden formar parte para darle más valor al tablero. Proporciona herramientas para crear nuevos módulos con nuevas capacidades a los investigadores.',
+        title:'🧩 QUANTUM PUZZLE', badge:'badge-new', badgeTxt:'APPS',
+        desc:'Tienda de apps cuánticas: ejecuta programas reales en el compilador sin instalación. Crea, comparte y ejecuta tus propios experimentos.',
         delay:.4, show:true,
       },
     ];
@@ -1156,40 +1125,30 @@ body::before{content:'';position:fixed;inset:0;
   }
   function closeAuth() { document.getElementById('auth-modal').classList.remove('open'); }
 
-  function doLogin() {
+  async function doLogin() {
     const u = document.getElementById('l-user').value.trim();
     const p = document.getElementById('l-pass').value;
     if (!u || !p) return notify('Completa todos los campos');
-    const users = JSON.parse(localStorage.getItem('qcol_users') || '[]');
+    const users = await dbGet('users') || [];
     const f = users.find(x => x.username === u && x.password === p);
     if (!f) return notify('Usuario o contraseña incorrectos');
     curUser = f;
     localStorage.setItem('qcol_cur_user', JSON.stringify(curUser));
-    dbLoad().then(data => {
-        if (data?.users) {
-            localStorage.setItem('qcol_users', JSON.stringify(data.users));
-        }
-    });
     closeAuth(); updateUI(); renderMenu();
     notify(`¡Bienvenido, ${f.name}!`);
     broadcast({ type:'QCOL_USER_UPDATE', user:curUser });
   }
 
-  function doRegister() {
+  async function doRegister() {
     const name = document.getElementById('r-name').value.trim();
     const u    = document.getElementById('r-user').value.trim();
     const p    = document.getElementById('r-pass').value;
     if (!name||!u||!p) return notify('Completa todos los campos');
-    const users = JSON.parse(localStorage.getItem('qcol_users') || '[]');
+    const users = await dbGet('users') || [];
     if (users.find(x => x.username === u)) return notify('Ese usuario ya existe');
     const nu = { name, username:u, password:p, role:'user', canUpload:false, joined:new Date().toLocaleDateString() };
     users.push(nu);
-    localStorage.setItem('qcol_users', JSON.stringify(users));
-    dbGet('users').then(dbUsers => {
-        const merged = dbUsers || [];
-        if (!merged.find(u => u.username === nu.username)) merged.push(nu);
-        dbSet('users', merged);
-    });
+    await dbSet('users', users);
     curUser = nu;
     localStorage.setItem('qcol_cur_user', JSON.stringify(curUser));
     closeAuth(); updateUI(); renderMenu();
@@ -1378,7 +1337,6 @@ body::before{content:'';position:fixed;inset:0;
     
     const contentDiv = document.createElement('div');
     contentDiv.className = 'markdown-body';
-    // Renderizar siempre el contenido como Markdown (tanto para usuario como para bot)
     contentDiv.innerHTML = marked.parse(text);
     d.appendChild(contentDiv);
     
@@ -1405,7 +1363,6 @@ body::before{content:'';position:fixed;inset:0;
   }
 
   async function init() {
-    // Inicializar CodeMirror
     const editorContainer = document.getElementById('ai-editor');
     cmEditor = new EditorView({
       doc: '',
@@ -1426,6 +1383,10 @@ body::before{content:'';position:fixed;inset:0;
     }, 650);
 
     setupAI();
+
+    const saved = localStorage.getItem('qcol_cur_user');
+    if (saved) try { curUser = JSON.parse(saved); } catch(e) {}
+
     await dbInit().then(() => {
         renderMenu();
         checkEngine();
