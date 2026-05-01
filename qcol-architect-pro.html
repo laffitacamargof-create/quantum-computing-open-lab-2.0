@@ -541,7 +541,8 @@ function genId(){return 'c'+Date.now()+Math.random().toString(36).slice(2,6);}
 // ── NAVEGACIÓN ────────────────────────────────────────────────
 function goBack(){
   if(_expositionMode){
-    // En modo exposición: volver a proyectos sin deactivar (el core maneja el nav)
+    // Quitar modo exposición y volver a Proyectos
+    deactivateExpositionMode();
     postCore('QCOL_NAV',{screen:'projects'});
   } else {
     postCore('QCOL_NAV',{screen:'home'});
