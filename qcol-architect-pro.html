@@ -921,7 +921,7 @@ function openCircuitEditor(cellId){
     code:        cell.hiddenCode || '',
     circuitData: cell.circuitData || null
   });
-  notify('⚛ Abriendo Arquitecto Cuántico...');
+  notify('⚛ Abriendo editor de circuito...');
 }
 
 function buildCircuitOut(text){
@@ -1706,7 +1706,7 @@ async function runCell(id){
   // Para celdas circuit: ejecutar hiddenCode (el código generado por el arquitecto)
   const rawCode = isCircuit ? (cell.hiddenCode||'') : (isQk?(QISKIT_PREAMBLE+'\n'+cell.code.trim()):cell.code.trim());
   const code = isCircuit ? (QISKIT_PREAMBLE+'\n'+rawCode) : rawCode;
-  if(!rawCode.trim()){notify('⚛ Celda sin código — ábrela en el Arquitecto Cuántico');return;}
+  if(!rawCode.trim()){notify('⚛ Celda sin código — edita el circuito primero');return;}
   if(!code.trim())return;
   running=true;setSbRun(true);
   const rbtn=document.getElementById('rbtn-'+id);
@@ -1788,7 +1788,7 @@ function downloadNb(){
     cells:cells.map(c=>{
       const isCircuit = c.type==='circuit';
       const tags = c.type==='qiskit'?['qiskit-cell']:isCircuit?['circuit-cell']:[];
-      const source = isCircuit ? [c.hiddenCode||'# Celda de circuito visual (editar en el Arquitecto Cuántico)'] : [c.code];
+      const source = isCircuit ? [c.hiddenCode||'# Celda de circuito visual'] : [c.code];
       const meta = {tags};
       if(isCircuit){ meta.hidden_code=c.hiddenCode||''; meta.circuit_data=c.circuitData||null; }
       return {cell_type:c.type==='markdown'?'markdown':'code', source, metadata:meta, outputs:[], execution_count:c.exec_count};
@@ -2110,7 +2110,7 @@ function buildCellEl(cell,i){
       <div class="cell-gutter">
         <div class="cell-num">${cell.exec_count!==null?`[${cell.exec_count}]`:'[ ]'}</div>
         <button class="cell-run-btn" id="rbtn-${cell.id}"
-          onclick="event.stopPropagation();runCell('${cell.id}')" title="${hasCode?'Ejecutar circuito':'Editar primero en el Arquitecto'}">▶</button>
+          onclick="event.stopPropagation();runCell('${cell.id}')" title="${hasCode?'Ejecutar circuito':'Editar el circuito primero'}">>▶</button>
       </div>
       <div class="cell-body">
         <div class="cell-type-badge ctb-circ">
@@ -2118,18 +2118,18 @@ function buildCellEl(cell,i){
         </div>
         <div class="cell-circuit-preview" id="cprev-${cell.id}"
           onclick="event.stopPropagation();openCircuitEditor('${cell.id}')"
-          title="Haz clic para editar en el Arquitecto Cuántico">
+          title="Haz clic para editar el circuito">
           ${hasCircuit
             ? `<div class="circ-preview-hint">⚛ CIRCUITO CUÁNTICO — clic para editar</div>${circuitSVG}`
             : `<div class="circ-empty-hint" onclick="event.stopPropagation();openCircuitEditor('${cell.id}')">
                 ⚛ Celda de Circuito Visual<br>
-                <span style="font-size:.4rem;color:rgba(0,200,100,.4);">Haz clic para abrir el Arquitecto Cuántico y diseñar el circuito</span>
+                <span style="font-size:.4rem;color:rgba(0,200,100,.4);">Haz clic para editar el circuito visual</span>
               </div>`
           }
         </div>
         <div style="display:flex;gap:.4rem;margin-top:.3rem;align-items:center;">
           <button class="circ-edit-btn" onclick="event.stopPropagation();openCircuitEditor('${cell.id}')">
-            ✏ Editar en Arquitecto
+            ✏ Editar Circuito
           </button>
           ${hasCode?`<button class="circ-edit-btn" style="background:rgba(0,136,255,.1);border-color:rgba(0,136,255,.3);color:var(--bl2);"
             onclick="event.stopPropagation();runCell('${cell.id}')">▶ Ejecutar</button>`:''}
