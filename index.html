@@ -731,16 +731,30 @@ body::before{content:'';position:fixed;inset:0;
     const d = e.data; if (!d?.type) return;
 
     if (d.type === 'QCOL_OPEN_NB_EXPOSITION') {
-      const notebookFrame = iframes['architect-pro'];
-      if (notebookFrame && notebookFrame.contentWindow) {
-        notebookFrame.contentWindow.postMessage(d, '*');
-      } else {
-        setTimeout(() => {
-          const retryFrame = iframes['architect-pro'];
-          if (retryFrame && retryFrame.contentWindow) {
-            retryFrame.contentWindow.postMessage(d, '*');
+      // 1. Navegar a la pantalla del Quantum Notebook PRIMERO
+      nav('architect-pro');
+
+      // 2. Enviar el mensaje al iframe — con retry robusto igual que QCOL_OPEN_ARCHITECT_EDIT
+      const sendExpo = () => {
+        const nbFrame = iframes['architect-pro'];
+        if (nbFrame && nbFrame.contentWindow) {
+          nbFrame.contentWindow.postMessage(d, '*');
+          return true;
+        }
+        return false;
+      };
+
+      if (!sendExpo()) {
+        // Iframe aún cargando — reintentar cada 200ms hasta 5s
+        let attempts = 0;
+        const retry = setInterval(() => {
+          attempts++;
+          if (sendExpo()) {
+            clearInterval(retry);
+          } else if (attempts > 25) {
+            clearInterval(retry);
           }
-        }, 300);
+        }, 200);
       }
       return;
     }

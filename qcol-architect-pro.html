@@ -2385,11 +2385,11 @@ window.addEventListener('message',e=>{
       if(cells[0]) focusCell(cells[0].id);
       notify('👁 Modo exposición — lee el material y experimenta con el código');
     } else {
-      // Modo normal
+      // Modo normal — restaurar sin btn-add-code/btn-add-qk (ya no existen)
       _expositionMode = false;
       document.body.classList.remove('expo-mode');
       document.getElementById('expo-badge').style.display='none';
-      ['btn-add-code','btn-add-qk','btn-add-md','btn-import',
+      ['btn-add-md','btn-add-circ','btn-import',
        'btn-download','btn-save','btn-publish','stab-2'].forEach(id=>{
         const el=document.getElementById(id); if(el) el.style.display='';
       });
