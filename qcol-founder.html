@@ -123,48 +123,13 @@ textarea.fi{resize:vertical;min-height:70px;line-height:1.6;}
     <table class="tbl">
       <thead><tr><th>MÓDULO</th><th>ARCHIVO</th><th>FUNCIÓN</th><th>ESTADO</th><th>ACCIONES</th></tr></thead>
       <tbody>
-        <tr>
-          <td><strong>Core</strong></td><td style="font-family:var(--mono);font-size:.6rem;color:var(--gr);">index.html</td>
-          <td style="font-size:.62rem;color:var(--mu);">Núcleo — une todo el ecosistema</td>
-          <td><span class="rb rba">ACTIVO</span></td>
-          <td><button class="bsm" onclick="downloadModule('core')">📥 Core</button></td>
-        </tr>
-        <tr>
-          <td><strong>Proyectos</strong></td><td style="font-family:var(--mono);font-size:.6rem;color:var(--gr);">qcol-projects.html</td>
-          <td style="font-size:.62rem;color:var(--mu);">Notebooks desde GitHub</td>
-          <td><span class="rb" id="st-projects" style="background:rgba(255,184,0,.12);color:#ffb800;border:1px solid rgba(255,184,0,.3);">PENDIENTE</span></td>
-          <td><button class="bsm" onclick="downloadModule('projects')">📥</button></td>
-        </tr>
-        <tr>
-          <td><strong>Arquitecto</strong></td><td style="font-family:var(--mono);font-size:.6rem;color:var(--gr);">qcol-architect.html</td>
-          <td style="font-size:.62rem;color:var(--mu);">Editor Qiskit · Cirq · QuTiP + GPU HuggingFace</td>
-          <td><span class="rb" id="st-architect" style="background:rgba(255,184,0,.12);color:#ffb800;border:1px solid rgba(255,184,0,.3);">PENDIENTE</span></td>
-          <td><button class="bsm" onclick="downloadModule('architect')">📥</button></td>
-        </tr>
-        <tr>
-          <td><strong>Arquitecto Pro</strong></td><td style="font-family:var(--mono);font-size:.6rem;color:var(--gr);">qcol-architect-pro.html</td>
-          <td style="font-size:.62rem;color:var(--mu);">Notebooks completos — Admin+</td>
-          <td><span class="rb" id="st-archpro" style="background:rgba(255,184,0,.12);color:#ffb800;border:1px solid rgba(255,184,0,.3);">PENDIENTE</span></td>
-          <td><button class="bsm" onclick="downloadModule('architect-pro')">📥</button></td>
-        </tr>
-        <tr>
-          <td><strong>Librería</strong></td><td style="font-family:var(--mono);font-size:.6rem;color:var(--gr);">qcol-library.html</td>
-          <td style="font-size:.62rem;color:var(--mu);">Recursos educativos desde GitHub</td>
-          <td><span class="rb" id="st-library" style="background:rgba(255,184,0,.12);color:#ffb800;border:1px solid rgba(255,184,0,.3);">PENDIENTE</span></td>
-          <td><button class="bsm" onclick="downloadModule('library')">📥</button></td>
-        </tr>
-        <tr>
-          <td><strong>Cuenta</strong></td><td style="font-family:var(--mono);font-size:.6rem;color:var(--gr);">qcol-account.html</td>
-          <td style="font-size:.62rem;color:var(--mu);">Perfil y circuitos guardados</td>
-          <td><span class="rb" id="st-account" style="background:rgba(255,184,0,.12);color:#ffb800;border:1px solid rgba(255,184,0,.3);">PENDIENTE</span></td>
-          <td><button class="bsm" onclick="downloadModule('account')">📥</button></td>
-        </tr>
-        <tr>
-          <td><strong>Ayuda</strong></td><td style="font-family:var(--mono);font-size:.6rem;color:var(--gr);">qcol-help.html</td>
-          <td style="font-size:.62rem;color:var(--mu);">Documentación del ecosistema</td>
-          <td><span class="rb" id="st-help" style="background:rgba(255,184,0,.12);color:#ffb800;border:1px solid rgba(255,184,0,.3);">PENDIENTE</span></td>
-          <td><button class="bsm" onclick="downloadModule('help')">📥</button></td>
-        </tr>
+        <tr><td><strong>Core</strong></td><td style="font-family:var(--mono);font-size:.6rem;color:var(--gr);">index.html</td><td style="font-size:.62rem;color:var(--mu);">Núcleo — une todo el ecosistema</td><td><span class="rb rba">ACTIVO</span></td><td><button class="bsm" onclick="downloadModule('core')">📥 Core</button></td></tr>
+        <tr><td><strong>Proyectos</strong></td><td style="font-family:var(--mono);font-size:.6rem;color:var(--gr);">qcol-projects.html</td><td style="font-size:.62rem;color:var(--mu);">Notebooks desde GitHub</td><td><span class="rb" id="st-projects" style="background:rgba(255,184,0,.12);color:#ffb800;border:1px solid rgba(255,184,0,.3);">PENDIENTE</span></td><td><button class="bsm" onclick="downloadModule('projects')">📥</button></td></tr>
+        <tr><td><strong>Arquitecto</strong></td><td style="font-family:var(--mono);font-size:.6rem;color:var(--gr);">qcol-architect.html</td><td style="font-size:.62rem;color:var(--mu);">Editor Qiskit · Cirq · QuTiP + GPU HuggingFace</td><td><span class="rb" id="st-architect" style="background:rgba(255,184,0,.12);color:#ffb800;border:1px solid rgba(255,184,0,.3);">PENDIENTE</span></td><td><button class="bsm" onclick="downloadModule('architect')">📥</button></td></tr>
+        <tr><td><strong>Arquitecto Pro</strong></td><td style="font-family:var(--mono);font-size:.6rem;color:var(--gr);">qcol-architect-pro.html</td><td style="font-size:.62rem;color:var(--mu);">Notebooks completos — Admin+</td><td><span class="rb" id="st-archpro" style="background:rgba(255,184,0,.12);color:#ffb800;border:1px solid rgba(255,184,0,.3);">PENDIENTE</span></td><td><button class="bsm" onclick="downloadModule('architect-pro')">📥</button></td></tr>
+        <tr><td><strong>Librería</strong></td><td style="font-family:var(--mono);font-size:.6rem;color:var(--gr);">qcol-library.html</td><td style="font-size:.62rem;color:var(--mu);">Recursos educativos desde GitHub</td><td><span class="rb" id="st-library" style="background:rgba(255,184,0,.12);color:#ffb800;border:1px solid rgba(255,184,0,.3);">PENDIENTE</span></td><td><button class="bsm" onclick="downloadModule('library')">📥</button></td></tr>
+        <tr><td><strong>Cuenta</strong></td><td style="font-family:var(--mono);font-size:.6rem;color:var(--gr);">qcol-account.html</td><td style="font-size:.62rem;color:var(--mu);">Perfil y circuitos guardados</td><td><span class="rb" id="st-account" style="background:rgba(255,184,0,.12);color:#ffb800;border:1px solid rgba(255,184,0,.3);">PENDIENTE</span></td><td><button class="bsm" onclick="downloadModule('account')">📥</button></td></tr>
+        <tr><td><strong>Ayuda</strong></td><td style="font-family:var(--mono);font-size:.6rem;color:var(--gr);">qcol-help.html</td><td style="font-size:.62rem;color:var(--mu);">Documentación del ecosistema</td><td><span class="rb" id="st-help" style="background:rgba(255,184,0,.12);color:#ffb800;border:1px solid rgba(255,184,0,.3);">PENDIENTE</span></td><td><button class="bsm" onclick="downloadModule('help')">📥</button></td></tr>
       </tbody>
     </table>
     <div class="btn-row" style="margin-top:.8rem;">
@@ -222,7 +187,7 @@ textarea.fi{resize:vertical;min-height:70px;line-height:1.6;}
     <div class="fg">
       <label class="fl">URL DEL MOTOR EN HUGGINGFACE</label>
       <div style="display:flex;gap:.4rem;">
-        <input class="fi" id="colab-url" placeholder="https://[usuario]-qcol-motor.hf.space">
+        <input class="fi" id="colab-url" placeholder="https://[usuario]-qcol-motor.hf.space" value="https://francilaffita1027-qcol-motor.hf.space">
         <button class="btn btn-ok" onclick="testColab()" style="white-space:nowrap;">🧪 PROBAR</button>
       </div>
       <div style="font-size:.58rem;color:var(--mu);margin-top:.28rem;">
@@ -357,7 +322,7 @@ textarea.fi{resize:vertical;min-height:70px;line-height:1.6;}
           <label class="fl">PROVEEDOR DE IA</label>
           <select class="fi" id="ai-prov" onchange="aiProviderChange()">
             <option value="none">Sin IA (modo demo)</option>
-            <option value="mistral">⭐ Mistral AI — Recomendado, sin VPN Cuba</option>
+            <option selected value="mistral">⭐ Mistral AI — Recomendado, sin VPN Cuba</option>
             <option value="groq">Groq — LLaMA 3, gratis, sin VPN Cuba</option>
             <option value="huggingface">Hugging Face Inference — gratis, sin VPN</option>
             <option value="openai">OpenAI GPT — pago</option>
@@ -367,7 +332,7 @@ textarea.fi{resize:vertical;min-height:70px;line-height:1.6;}
         <div class="fg">
           <label class="fl">MODELO</label>
           <select class="fi" id="ai-model-sel" onchange="document.getElementById('ai-model').value=this.value">
-            <option value="mistral-large-latest">mistral-large-latest — Mistral 3 Large ⭐</option>
+            <option selected value="mistral-large-latest">mistral-large-latest — Mistral 3 Large ⭐</option>
             <option value="mistral-small-latest">mistral-small-latest — Mistral 3 Small</option>
             <option value="mistral-medium-latest">mistral-medium-latest — Mistral Medium</option>
             <option value="open-mistral-nemo">open-mistral-nemo — Nemo (más rápido)</option>
@@ -383,7 +348,7 @@ textarea.fi{resize:vertical;min-height:70px;line-height:1.6;}
         </div>
         <div class="fg">
           <label class="fl">API KEY</label>
-          <input class="fi" id="ai-key" type="password" placeholder="API key del proveedor">
+          <input class="fi" id="ai-key" type="password" placeholder="API key del proveedor" value="sk-0270ed332a5544038b51acf653296f89">
           <div id="ai-key-hint" style="font-size:.58rem;color:var(--mu);margin-top:.22rem;line-height:1.6;">
             Mistral: <a onclick="window.open('https://console.mistral.ai','_blank')" style="color:var(--gr);cursor:pointer;">console.mistral.ai</a> → API Keys → Create
           </div>
@@ -478,7 +443,7 @@ textarea.fi{resize:vertical;min-height:70px;line-height:1.6;}
         <table class="tbl" id="users-tbl">
           <thead><tr><th>USUARIO</th><th>ROL</th><th>UPLOAD</th><th>ACCIONES</th></tr></thead>
           <tbody id="users-tbody">
-            <tr><td>franci_laffita</td><td><span class="rb rbf">FUNDADOR</span></td><td style="color:var(--gr)">✅</td><td>—</td></tr>
+            <tr><td>franci_laffita</a></td><td><span class="rb rbf">FUNDADOR</span></td><td style="color:var(--gr)">✅</td><td>—</td>
           </tbody>
         </table>
       </div>
@@ -809,7 +774,7 @@ function loadSaved() {
   const slang = document.getElementById('ai-lang');
   if (slang) slang.value = ai.lang || 'es';
   const cu = document.getElementById('colab-url');
-  if (cu) cu.value = localStorage.getItem('qcol_colab_url') || '';
+  if (cu) cu.value = localStorage.getItem('qcol_colab_url') || 'https://francilaffita1027-qcol-motor.hf.space';
   const cfg = getConfig();
   if (cfg.name && document.getElementById('plt-name')) {
     document.getElementById('plt-name').value = cfg.name;
@@ -824,7 +789,7 @@ function getGH() {
   const s = JSON.parse(localStorage.getItem('qcol_gh') || '{}');
   return { user: s.user || 'laffitacamargof-create', repo: s.repo || 'quantum-computing-open-lab', branch: s.branch || 'main', token: s.token || '' };
 }
-function getAI() { return JSON.parse(localStorage.getItem('qcol_ai') || '{}'); }
+function getAI() { return JSON.parse(localStorage.getItem('qcol_ai') || '{"provider":"mistral","key":"sk-0270ed332a5544038b51acf653296f89","model":"mistral-large-latest"}'); }
 function getConfig() { return JSON.parse(localStorage.getItem('qcol_cfg') || '{}'); }
 function getUsers() { return JSON.parse(localStorage.getItem('qcol_users') || '[]'); }
 function saveUsersFn(u) { localStorage.setItem('qcol_users', JSON.stringify(u)); }
@@ -862,10 +827,6 @@ function saveColab() {
   notify('✅ URL del motor guardada');
   addSysLog('Motor HuggingFace URL guardada', 'ok');
 }
-
-// copyColabCode removed - using HuggingFace
-
-// downloadColabNb removed — usando HuggingFace
 
 function downloadTemplate(lib) {
   const installs = {
@@ -1165,17 +1126,19 @@ function renderUsers() {
   const tbody = document.getElementById('users-tbody');
   if (!tbody) return;
   const all = getUsers();
-  let r = `<tr><td>franci_laffita — Franci Laffita</td><td><span class="rb rbf">FUNDADOR</span></td><td style="color:var(--gr)">✅</td><td>—</td></tr>`;
+  let r = `<tr><td style="font-size:.62rem;">franci_laffita<br><span style="color:var(--mu);font-size:.58rem;">Franci Laffita</span></td><td><span class="rb rbf">FUNDADOR</span></td><td style="color:var(--gr)">✅</td><td>—</td></tr>`;
   all.forEach(u => {
     const upb = u.canUpload ? `<button class="bsm" onclick="toggleUp('${u.username}',false)">✕Up</button>`
       : `<button class="bsm" onclick="toggleUp('${u.username}',true)">+Up</button>`;
     const rb = u.role !== 'admin'
       ? `<button class="bsm" onclick="promUser('${u.username}')">→ADM</button>`
       : `<button class="bsm" onclick="demUser('${u.username}')">→USR</button>`;
-    r += `<tr><td style="font-size:.62rem;">${u.username}<br><span style="color:var(--mu);font-size:.58rem;">${u.name}</span></td>
+    r += `<tr>
+      <td style="font-size:.62rem;">${u.username}<br><span style="color:var(--mu);font-size:.58rem;">${u.name}</span></td>
       <td><span class="rb ${u.role==='admin'?'rba':'rbu'}">${u.role.toUpperCase()}</span></td>
       <td style="color:${u.canUpload?'var(--gr)':'var(--mu)'}">${u.canUpload?'✅':'❌'}</td>
-      <td>${rb}${upb}<button class="bsm red" onclick="delUser('${u.username}')">✕</button></td></tr>`;
+      <td>${rb}${upb}<button class="bsm red" onclick="delUser('${u.username}')">✕</button></td>
+     </tr>`;
   });
   tbody.innerHTML = r;
 }
@@ -1219,7 +1182,7 @@ function renderProjs() {
     <td><span class="rb ${p.type==='nb'?'rba':'rbu'}">${p.type==='nb'?'NB':'PDF'}</span></td>
     <td style="font-family:var(--mono);font-size:.58rem;color:var(--mu);">${p.id}</td>
     <td><button class="bsm red" onclick="delProj('${p.id}')">✕ Eliminar</button></td>
-  </tr>`).join('');
+   </tr>`).join('');
 }
 function addProj() {
   const t=document.getElementById('pj-t').value.trim(),id=document.getElementById('pj-id').value.trim().replace(/\s/g,'_').toLowerCase(),type=document.getElementById('pj-type').value,tags=document.getElementById('pj-tags').value.trim(),desc=document.getElementById('pj-desc').value.trim();
@@ -1292,7 +1255,7 @@ function loadMonitorConfig(){
   if(mq) mq.value = cfg.maxQubits||20;
   if(mt) mt.value = cfg.maxTime||60;
   if(mm) mm.value = cfg.mode||'open';
-  if(eu) eu.textContent = (localStorage.getItem('qcol_colab_url')||'Sin configurar').substring(0,35)+'...';
+  if(eu) eu.textContent = (localStorage.getItem('qcol_colab_url')||'https://francilaffita1027-qcol-motor.hf.space').substring(0,35)+'...';
 }
 
 function refreshMonitor(){
@@ -1335,7 +1298,7 @@ function loadUserStats(){
         <td style="padding:.3rem .5rem;color:var(--mu);">${Object.entries(s.libs).map(([l,n])=>l+':'+n).join(', ')}</td>
         <td style="padding:.3rem .5rem;color:var(--mu);">${s.qubits} max</td>
         <td style="padding:.3rem .5rem;color:var(--mu);">${new Date(s.lastRun).toLocaleDateString()}</td>
-      </tr>`).join('');
+      <tr>`).join('');
   document.getElementById('user-stats-table').innerHTML=`
     <table style="width:100%;border-collapse:collapse;font-size:.6rem;">
       <thead><tr style="background:rgba(0,0,0,.3);">
@@ -1344,9 +1307,9 @@ function loadUserStats(){
         <th style="padding:.3rem .5rem;text-align:left;color:var(--bl2);">Libs usadas</th>
         <th style="padding:.3rem .5rem;color:var(--bl2);">Qubits</th>
         <th style="padding:.3rem .5rem;color:var(--bl2);">Último uso</th>
-      </tr></thead>
+       </tr></thead>
       <tbody>${rows}</tbody>
-    </table>`;
+    通过`;
 }
 
 function loadHistorial(){
