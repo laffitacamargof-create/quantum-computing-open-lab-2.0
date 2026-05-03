@@ -254,10 +254,11 @@
     <div class="top-editor-bar">
         <input type="text" id="project-name-input" placeholder="Nombre del proyecto" style="background:var(--bg3); border:1px solid var(--bd); border-radius:6px; padding:0.4rem; color:white; width:240px;">
         <div class="editor-config">
-            <input type="text" id="server-url-input" class="server-input" placeholder="URL servidor cuántico" readonly style="background:#0a0e1a; color:var(--cy);">
-            <button class="btn-secondary" id="test-server-btn">🔌 Probar</button>
-            <span id="server-status" style="font-size:0.55rem;"></span>
-            <span id="auto-status" class="auto-status">🔄 auto-conectado</span>
+            <!-- server-url-input oculto: la URL llega automáticamente del Panel Fundador -->
+            <input type="text" id="server-url-input" style="display:none;" readonly>
+            <span id="server-status" style="display:none;"></span>
+            <span id="test-server-btn" style="display:none;"></span>
+            <span id="auto-status" class="auto-status" style="display:none;"></span>
         </div>
         <button class="btn-primary" id="save-project-editor">💾 Guardar proyecto</button>
         <button class="btn-secondary" id="preview-run-btn">▶ Probar ejecución</button>
@@ -446,7 +447,7 @@
         if (data.type === 'QCOL_REQUEST_COMPILE') {
             const { requestId, appId, appName, pythonCode, htmlCode, serverUrl } = data;
             try {
-                const finalServerUrl = serverUrl || document.getElementById('server-url-input').value;
+                const finalServerUrl = serverUrl || localStorage.getItem('qcol_colab_url') || '';
                 
                 const bridge = `
                 <script>
@@ -575,7 +576,7 @@
                 name: proj.name,
                 pythonCode: proj.pythonCode,
                 htmlCode: proj.htmlCode,
-                serverUrl: proj.serverUrl || document.getElementById('server-url-input').value,
+                serverUrl: proj.serverUrl || localStorage.getItem('qcol_colab_url') || '',
                 createdAt: proj.createdAt
             }
         };
@@ -609,29 +610,33 @@
         const proj = projects.find(p => p.id === id);
         if (!proj) return;
 
-        // ── PROTECCIÓN: guardar estado del editor actual antes de cambiar proyecto
-        // Evita que los cambios no guardados del proyecto anterior contaminen otro
+        // ── Anti-contaminación: auto-guardar anterior SOLO si existe en el array
+        // y su contenido en el editor no coincide con otro proyecto (evita propagación)
         if (currentEditId && currentEditId !== id) {
             const prevIdx = projects.findIndex(p => p.id === currentEditId);
             if (prevIdx !== -1) {
-                // Auto-guardar silenciosamente el proyecto anterior
-                projects[prevIdx].pythonCode = document.getElementById('python-editor').value;
-                projects[prevIdx].htmlCode   = document.getElementById('html-editor').value;
-                projects[prevIdx].name       = document.getElementById('project-name-input').value.trim() || projects[prevIdx].name;
-                saveProjects();
+                const pyVal   = document.getElementById('python-editor').value;
+                const htmlVal = document.getElementById('html-editor').value;
+                const nameVal = document.getElementById('project-name-input').value.trim();
+                const isContaminated = projects.some((p, i) =>
+                    i !== prevIdx && p.pythonCode === pyVal && p.htmlCode === htmlVal);
+                if (!isContaminated) {
+                    projects[prevIdx].pythonCode = pyVal;
+                    projects[prevIdx].htmlCode   = htmlVal;
+                    projects[prevIdx].name       = nameVal || projects[prevIdx].name;
+                    saveProjects();
+                }
             }
         }
 
-        // ── Cargar el proyecto solicitado en el editor (limpieza total primero)
+        // ── Cargar snapshot del array (fuente de verdad), nunca del DOM
         currentEditId = id;
+        document.getElementById('project-name-input').value = '';
+        document.getElementById('python-editor').value      = '';
+        document.getElementById('html-editor').value        = '';
         document.getElementById('project-name-input').value = proj.name;
-        // Limpiar primero — evita residuos del proyecto anterior
-        document.getElementById('python-editor').value = '';
-        document.getElementById('html-editor').value   = '';
-        // Asignar el contenido real del proyecto
-        document.getElementById('python-editor').value = proj.pythonCode || '';
-        document.getElementById('html-editor').value   = proj.htmlCode   || '';
-        if (proj.serverUrl) setServerUrl(proj.serverUrl);
+        document.getElementById('python-editor').value      = proj.pythonCode || '';
+        document.getElementById('html-editor').value        = proj.htmlCode   || '';
         showScreen('editor');
     }
 
@@ -749,7 +754,7 @@
         const modeSpan = document.getElementById('runner-mode');
         const dot = document.getElementById('runner-dot');
         
-        let serverToUse = proj.serverUrl || document.getElementById('server-url-input').value;
+        let serverToUse = proj.serverUrl || localStorage.getItem('qcol_colab_url') || '';
         
         const serverActive = serverToUse && await testBackendConnection(serverToUse);
         if (serverActive) {
@@ -766,7 +771,7 @@
     }
 
     async function runPreview() {
-        const serverUrl = document.getElementById('server-url-input').value;
+        const serverUrl = localStorage.getItem('qcol_colab_url') || '';
         const { blobUrl, revoke } = await buildAppBlob(
             document.getElementById('python-editor').value,
             document.getElementById('html-editor').value,
@@ -806,7 +811,8 @@
         const nameVal  = document.getElementById('project-name-input').value.trim();
         const pyVal    = document.getElementById('python-editor').value;
         const htmlVal  = document.getElementById('html-editor').value;
-        const urlVal   = document.getElementById('server-url-input').value;
+        // serverUrl viene del Founder automáticamente, no del input (oculto)
+        const urlVal   = localStorage.getItem('qcol_colab_url') || '';
 
         if (!currentEditId) {
             // Crear nuevo proyecto
@@ -862,21 +868,27 @@
     }
 
     function startNewProject() {
-        // ── PROTECCIÓN: guardar el proyecto actual antes de crear uno nuevo
+        // ── Solo auto-guardar si el proyecto existe y el editor no tiene contenido contaminado
         if (currentEditId) {
             const prevIdx = projects.findIndex(p => p.id === currentEditId);
             if (prevIdx !== -1) {
-                projects[prevIdx].pythonCode = document.getElementById('python-editor').value;
-                projects[prevIdx].htmlCode   = document.getElementById('html-editor').value;
-                projects[prevIdx].name       = document.getElementById('project-name-input').value.trim() || projects[prevIdx].name;
-                saveProjects();
+                const pyVal   = document.getElementById('python-editor').value;
+                const htmlVal = document.getElementById('html-editor').value;
+                const nameVal = document.getElementById('project-name-input').value.trim();
+                const isContaminated = projects.some((p, i) =>
+                    i !== prevIdx && p.pythonCode === pyVal && p.htmlCode === htmlVal);
+                if (!isContaminated) {
+                    projects[prevIdx].pythonCode = pyVal;
+                    projects[prevIdx].htmlCode   = htmlVal;
+                    projects[prevIdx].name       = nameVal || projects[prevIdx].name;
+                    saveProjects();
+                }
             }
         }
-        // Limpiar completamente antes de empezar el nuevo proyecto
         currentEditId = null;
-        document.getElementById('project-name-input').value = "Nuevo proyecto";
-        document.getElementById('python-editor').value = `def mi_funcion(param):\n    return f"Recibí: {param}"\n\nimport numpy as np\nprint("Python remoto listo")`;
-        document.getElementById('html-editor').value = `<!DOCTYPE html>\n<html>\n<head><meta charset="UTF-8"></head>\n<body style="background:#0f172a; color:white; font-family:sans-serif; padding:1rem;">\n<h2>Mi App Cuántica</h2>\n<button onclick="testCall()">Llamar función</button>\n<p id="output"></p>\n<script>\nasync function testCall() {\n    const res = await window.pyCall("mi_funcion", "Hola mundo");\n    document.getElementById('output').innerText = res;\n}\n<\/script>\n</body>\n</html>`;
+        document.getElementById('project-name-input').value = 'Nueva app cuántica';
+        document.getElementById('python-editor').value = '# Código Python remoto\ndef mi_funcion(param):\n    return f"Resultado: {param}"';
+        document.getElementById('html-editor').value = '<!DOCTYPE html>\n<html>\n<head><meta charset="UTF-8"></head>\n<body style="background:#0a0e1a;color:white;font-family:sans-serif;padding:1.5rem;">\n<h2>⚛️ Mi App Cuántica</h2>\n<button onclick="llamar()">Ejecutar</button>\n<p id="out"></p>\n<script>\nasync function llamar(){\n  const r = await window.pyCall("mi_funcion","hola");\n  document.getElementById("out").innerText = r;\n}\n<\/script>\n</body>\n</html>';
         showScreen('editor');
     }
 
@@ -887,14 +899,7 @@
         document.getElementById('back-to-repo-runner').onclick = () => showScreen('repo');
         document.getElementById('preview-run-btn').onclick = runPreview;
         document.getElementById('close-modal-btn').onclick = closeModal;
-        document.getElementById('test-server-btn').onclick = async () => {
-            const url = document.getElementById('server-url-input').value;
-            if (!url) { notify("Esperando URL automática del Founder...", 2000); return; }
-            const ok = await testBackendConnection(url);
-            if (ok) notify("✅ Servidor remoto conectado", 2000);
-            else notify("❌ No se pudo conectar", 2000);
-            updateServerStatusText(url);
-        };
+        // test-server-btn oculto — URL llega automáticamente del Panel Fundador
     }
 
     // Inicialización
