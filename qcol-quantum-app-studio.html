@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Quantum App Studio · Conectado al Founder</title>
+    <title>Quantum App Studio · Connected to Founder</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -24,6 +24,7 @@
             --tx: #dce8ff;
             --tx2: #8aa0c4;
             --mu: #3d5a8a;
+            --line-num-width: 50px;
         }
         body {
             background: var(--bg);
@@ -48,6 +49,7 @@
             transition: transform 0.28s;
             backdrop-filter: blur(20px);
             pointer-events: none;
+            max-width: 90vw;
         }
         .notif.show { transform: translateX(0); }
         .screen { width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
@@ -78,9 +80,33 @@
             cursor: pointer;
             transition: 0.1s;
         }
-        .btn-primary:hover {
-            transform: scale(0.98);
+        .btn-primary:hover { transform: scale(0.98); }
+        .btn-danger {
+            background: linear-gradient(135deg, #8b0000, var(--rd));
+            border: none;
+            border-radius: 6px;
+            padding: 0.3rem 0.7rem;
+            font-weight: bold;
+            font-size: 0.75rem;
+            color: white;
+            font-family: monospace;
+            cursor: pointer;
+            transition: 0.1s;
         }
+        .btn-danger:hover { transform: scale(0.98); }
+        .btn-success {
+            background: linear-gradient(135deg, #006633, var(--gr));
+            border: none;
+            border-radius: 6px;
+            padding: 0.3rem 0.7rem;
+            font-weight: bold;
+            font-size: 0.75rem;
+            color: white;
+            font-family: monospace;
+            cursor: pointer;
+            transition: 0.1s;
+        }
+        .btn-success:hover { transform: scale(0.98); }
         .projects-grid {
             flex: 1;
             overflow-y: auto;
@@ -116,6 +142,8 @@
             color: var(--yw);
         }
         .btn-pending:hover { background: var(--yw); color: #0a0e1a; border-color: var(--yw); }
+        
+        /* ========== EDITOR CON NÚMEROS DE LÍNEA Y ERRORES ========== */
         .editor-container {
             display: flex;
             flex: 1;
@@ -129,12 +157,86 @@
             background: var(--bg4);
             border-right: 1px solid var(--bd);
         }
+        .editor-pane:last-child { border-right: none; }
         .pane-header {
             padding: 0.5rem;
             background: #060912;
             border-bottom: 1px solid var(--bd);
             font-family: monospace;
             font-size: 0.7rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.3rem;
+        }
+        .pane-header .badge {
+            font-size: 0.5rem;
+            background: rgba(0,255,136,0.15);
+            color: var(--gr);
+            padding: 0.1rem 0.5rem;
+            border-radius: 10px;
+        }
+        .pane-header .badge-html {
+            background: rgba(255,215,0,0.15);
+            color: var(--yw);
+        }
+        .pane-header .badge-error {
+            background: rgba(255,68,102,0.2);
+            color: var(--rd);
+        }
+        
+        /* Editor con números de línea y errores */
+        .editor-wrapper {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            background: var(--bg4);
+            position: relative;
+        }
+        .line-numbers {
+            background: var(--bg4);
+            color: var(--mu);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            padding: 0.8rem 0.5rem;
+            text-align: right;
+            user-select: none;
+            overflow: hidden;
+            border-right: 1px solid var(--bd);
+            min-width: var(--line-num-width);
+            max-width: var(--line-num-width);
+            line-height: 1.6;
+            white-space: pre;
+            padding-top: 0.8rem;
+            position: relative;
+            z-index: 1;
+        }
+        .line-numbers .ln {
+            display: block;
+            color: var(--mu);
+            opacity: 0.6;
+            transition: color 0.15s;
+            position: relative;
+        }
+        .line-numbers .ln.active {
+            color: var(--tx2);
+            opacity: 1;
+        }
+        .line-numbers .ln.error {
+            color: var(--rd) !important;
+            opacity: 1 !important;
+            font-weight: bold;
+        }
+        .line-numbers .ln.error::after {
+            content: ' ✗';
+            color: var(--rd);
+            font-weight: bold;
+        }
+        /* Línea de error en el editor */
+        .code-area .error-line {
+            background: rgba(255,68,102,0.12) !important;
+            border-left: 3px solid var(--rd);
         }
         .code-area {
             flex: 1;
@@ -147,11 +249,22 @@
             resize: none;
             outline: none;
             white-space: pre-wrap;
+            tab-size: 4;
+            line-height: 1.6;
+            overflow: auto;
+            position: relative;
+            z-index: 2;
         }
+        .code-area:focus { background: #080c18; }
+        .code-area::selection {
+            background: rgba(0,136,255,0.3);
+        }
+        /* ============================================== */
+
         .top-editor-bar {
             padding: 0.5rem;
             display: flex;
-            gap: 0.8rem;
+            gap: 0.5rem;
             background: var(--bg2);
             align-items: center;
             flex-wrap: wrap;
@@ -161,6 +274,7 @@
             gap: 0.5rem;
             align-items: center;
             margin-left: auto;
+            flex-wrap: wrap;
         }
         .server-input {
             background: var(--bg3);
@@ -235,81 +349,591 @@
             color: var(--gr);
             margin-left: 0.5rem;
         }
+        .code-stats {
+            font-size: 0.5rem;
+            color: var(--mu);
+            font-family: monospace;
+            display: flex;
+            gap: 0.8rem;
+            align-items: center;
+        }
+        .code-stats span { padding: 0.1rem 0.4rem; background: rgba(255,255,255,0.05); border-radius: 4px; }
+        .helper-text {
+            padding: 0.3rem 0.8rem;
+            background: #060912;
+            font-size: 0.55rem;
+            color: var(--mu);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .helper-text code {
+            color: var(--cy);
+            background: rgba(0,255,255,0.08);
+            padding: 0.1rem 0.4rem;
+            border-radius: 3px;
+        }
+        .helper-text .py-extract {
+            color: var(--gr);
+            font-family: monospace;
+            font-size: 0.5rem;
+        }
+        .toolbar-group {
+            display: flex;
+            gap: 0.3rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .btn-icon-only {
+            background: rgba(30,48,88,0.5);
+            border: 1px solid var(--bd2);
+            border-radius: 4px;
+            padding: 0.25rem 0.5rem;
+            color: var(--tx2);
+            font-size: 0.6rem;
+            cursor: pointer;
+            font-family: monospace;
+            transition: 0.1s;
+        }
+        .btn-icon-only:hover { background: var(--bl); color: white; border-color: var(--bl); }
+        .btn-icon-only.danger:hover { background: var(--rd); border-color: var(--rd); }
+        .btn-icon-only.success:hover { background: var(--gr); border-color: var(--gr); color: #0a0e1a; }
+        .file-input-hidden { display: none; }
+        .status-bar {
+            padding: 0.15rem 0.8rem;
+            background: #050810;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.5rem;
+            color: var(--mu);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid var(--bd);
+            min-height: 22px;
+        }
+        .status-bar .right {
+            display: flex;
+            gap: 1rem;
+        }
+        .status-bar .error-count {
+            color: var(--rd);
+            font-weight: bold;
+        }
+        .status-bar .error-count.ok {
+            color: var(--gr);
+        }
+        .line-numbers::-webkit-scrollbar { width: 0; height: 0; }
+        .line-numbers { scrollbar-width: none; }
+        
+        /* Tooltip de error */
+        .error-tooltip {
+            position: fixed;
+            background: rgba(40,10,20,0.95);
+            border: 1px solid var(--rd);
+            border-radius: 6px;
+            padding: 0.4rem 0.8rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem;
+            color: #ffccdd;
+            max-width: 400px;
+            z-index: 99999;
+            pointer-events: none;
+            display: none;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(255,68,102,0.2);
+        }
     </style>
 </head>
 <body>
 <div class="notif" id="notif"></div>
+<div class="error-tooltip" id="errorTooltip"></div>
 
-<!-- REPOSITORIO -->
+<!-- REPOSITORY -->
 <div id="repo-screen" class="screen">
     <div class="repo-header">
-        <div class="repo-title"></div>
-        <button class="btn-primary" id="new-project-btn">+ Nueva aplicación</button>
+        <div class="repo-title">⚛️ Quantum App Studio</div>
+        <button class="btn-primary" id="new-project-btn">+ New application</button>
     </div>
     <div class="projects-grid" id="projects-grid"></div>
 </div>
 
-<!-- EDITOR -->
+<!-- EDITOR - UNIFICADO CON NÚMEROS DE LÍNEA Y ERRORES -->
 <div id="editor-screen" class="screen hidden">
     <div class="top-editor-bar">
-        <input type="text" id="project-name-input" placeholder="Nombre del proyecto" style="background:var(--bg3); border:1px solid var(--bd); border-radius:6px; padding:0.4rem; color:white; width:240px;">
+        <input type="text" id="project-name-input" placeholder="Project name" style="background:var(--bg3); border:1px solid var(--bd); border-radius:6px; padding:0.4rem; color:white; width:200px;">
+        
+        <div class="toolbar-group">
+            <button class="btn-icon-only" id="download-code-btn" title="Download HTML file">📥 Download</button>
+            <button class="btn-icon-only" id="copy-code-btn" title="Copy to clipboard">📋 Copy</button>
+            <button class="btn-icon-only success" id="upload-code-btn" title="Upload HTML file">📤 Upload</button>
+            <button class="btn-icon-only danger" id="clear-code-btn" title="Clear all code">🗑️ Clear</button>
+        </div>
+        
+        <input type="file" id="file-input" class="file-input-hidden" accept=".html,.htm">
+        
         <div class="editor-config">
-            <!-- server-url-input oculto: la URL llega automáticamente del Panel Fundador -->
             <input type="text" id="server-url-input" style="display:none;" readonly>
             <span id="server-status" style="display:none;"></span>
-            <span id="test-server-btn" style="display:none;"></span>
             <span id="auto-status" class="auto-status" style="display:none;"></span>
         </div>
-        <button class="btn-primary" id="save-project-editor">💾 Guardar proyecto</button>
-        <button class="btn-secondary" id="preview-run-btn">▶ Probar ejecución</button>
-        <button class="btn-secondary" id="back-to-repo-editor">← Volver</button>
+        
+        <div class="toolbar-group">
+            <button class="btn-primary" id="save-project-editor">💾 Save</button>
+            <button class="btn-secondary" id="preview-run-btn">▶ Test</button>
+            <button class="btn-secondary" id="back-to-repo-editor">← Back</button>
+        </div>
     </div>
+    
     <div class="editor-container">
-        <div class="editor-pane">
-            <div class="pane-header">🐍 LÓGICA PYTHON (backend remoto)</div>
-            <textarea id="python-editor" class="code-area" spellcheck="false"></textarea>
-        </div>
-        <div class="editor-pane">
-            <div class="pane-header">🌐 INTERFAZ HTML + JS (frontend)</div>
-            <textarea id="html-editor" class="code-area" spellcheck="false"></textarea>
+        <div class="editor-pane" style="flex:1; border-right: none;">
+            <div class="pane-header">
+                <span>📄 QUANTUM APP · HTML + Python embebido</span>
+                <div class="code-stats">
+                    <span id="line-count">📄 0 lines</span>
+                    <span class="badge" id="py-lines-badge">🐍 0 lines</span>
+                    <span class="badge badge-html" id="html-lines-badge">🌐 0 lines</span>
+                    <span class="badge badge-error" id="error-badge">⚠️ 0 errors</span>
+                </div>
+            </div>
+            <div class="editor-wrapper">
+                <div class="line-numbers" id="line-numbers"></div>
+                <textarea id="app-editor" class="code-area" spellcheck="false"></textarea>
+            </div>
         </div>
     </div>
-    <div style="padding:0.3rem 0.8rem; background:#060912; font-size:0.55rem; color:var(--mu);">
-        💡 Las funciones Python se llaman con <span style="color:var(--cy);">window.pyCall("funcion", args...)</span>. La URL del servidor se obtiene automáticamente del Panel Fundador.
+    
+    <div class="helper-text">
+        <span>💡 Python se embebe con <code>// ⚡ PYTHON_START</code> y <code>// ⚡ PYTHON_END</code></span>
+        <span class="py-extract" id="py-extract-info">🐍 Extraído: <span id="py-extract-count">0</span> líneas</span>
+        <span>🌐 Usa <code>window.pyCall("func", args...)</code> para ejecutar Python</span>
+        <span>🔴 Errores de sintaxis marcados en rojo</span>
+    </div>
+    
+    <div class="status-bar">
+        <span id="cursor-status">Ln 1, Col 1</span>
+        <span class="right">
+            <span id="encoding-status">UTF-8</span>
+            <span id="file-size-status">0 KB</span>
+            <span id="server-status-text">🌐 Server: ---</span>
+            <span id="error-count-status" class="error-count ok">✅ 0 errors</span>
+        </span>
     </div>
 </div>
 
 <!-- RUNNER -->
 <div id="runner-screen" class="screen hidden">
     <div class="runner-header">
-        <button class="btn-secondary" id="back-to-repo-runner">← Repositorio</button>
+        <button class="btn-secondary" id="back-to-repo-runner">← Repository</button>
         <span id="runner-app-name" style="font-weight:bold;"></span>
-        <span id="runner-mode" style="margin-left:auto; font-size:0.6rem;"><span class="status-dot" id="runner-dot"></span> Conectando...</span>
+        <span id="runner-mode" style="margin-left:auto; font-size:0.6rem;"><span class="status-dot" id="runner-dot"></span> Connecting...</span>
     </div>
     <iframe id="app-iframe" class="app-iframe" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"></iframe>
 </div>
 
-<!-- MODAL PREVIEW -->
+<!-- PREVIEW MODAL -->
 <div id="preview-modal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <strong>🔬 Prueba de aplicación (sin guardar)</strong>
-            <button class="btn-secondary" id="close-modal-btn">Cerrar</button>
+            <strong>🔬 Application test (unsaved)</strong>
+            <button class="btn-secondary" id="close-modal-btn">Close</button>
         </div>
         <iframe id="preview-iframe" class="modal-iframe" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"></iframe>
     </div>
 </div>
 
 <script>
-    // ---------- REPOSITORIO + EDITOR + BACKEND REMOTO ----------
+    // ═══════════════════════════════════════════════════════════
+    // 🔄 MIGRACIÓN: UNIFICAR HTML + PYTHON EN UN SOLO ARCHIVO
+    // ═══════════════════════════════════════════════════════════
+    
+    // ---------- REPOSITORY + EDITOR + REMOTE BACKEND ----------
     let projects = [];
     let currentEditId = null;
     let remoteSessionStatus = false;
     let isEmbedded = false;
-    let parentOrigin = null;          // origen confiable cuando estamos embebidos
+    let parentOrigin = null;
     let receivedUrl = false;
+    let currentServerUrl = '';
+    let errorLines = new Set();
 
-    function notify(msg, dur=2000) {
+    // ═══════════════════════════════════════════════════════════
+    // 🛡️ PROTECTION: Force English AI + Clean editor on project switch
+    // ═══════════════════════════════════════════════════════════
+    (function initProtections() {
+        const storedAI = JSON.parse(localStorage.getItem('qcol_ai') || '{}');
+        if (!storedAI.lang || storedAI.lang === 'es') {
+            storedAI.lang = 'en';
+            localStorage.setItem('qcol_ai', JSON.stringify(storedAI));
+        }
+
+        const stored = localStorage.getItem('quantum_apps_repo_v3');
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored);
+                const migrated = parsed.map(proj => {
+                    if (proj.content) return proj;
+                    
+                    const pythonCode = proj.pythonCode || '';
+                    const htmlCode = proj.htmlCode || '';
+                    let content = htmlCode;
+                    
+                    if (pythonCode && pythonCode.trim()) {
+                        if (!content.includes('PYTHON_START')) {
+                            let pythonEmbed = '        // ⚡ PYTHON_START\n';
+                            pythonCode.split('\n').forEach(line => {
+                                pythonEmbed += '        // ' + line + '\n';
+                            });
+                            pythonEmbed += '        // ⚡ PYTHON_END\n';
+                            
+                            if (content.includes('<script>')) {
+                                content = content.replace('<script>', '<script>\n' + pythonEmbed);
+                            } else if (content.includes('</body>')) {
+                                content = content.replace('</body>', '<script>\n' + pythonEmbed + '\n<\/script>\n</body>');
+                            } else {
+                                content = content + '\n<script>\n' + pythonEmbed + '\n<\/script>\n';
+                            }
+                        }
+                    }
+                    
+                    return {
+                        id: proj.id || generateId(),
+                        name: proj.name || 'Untitled',
+                        content: content,
+                        pythonCode: pythonCode,
+                        htmlCode: htmlCode,
+                        serverUrl: proj.serverUrl || '',
+                        createdAt: proj.createdAt || Date.now()
+                    };
+                });
+                
+                localStorage.setItem('quantum_apps_repo_v3', JSON.stringify(migrated));
+                localStorage.setItem('quantum_apps_repo_v2_backup', stored);
+            } catch(e) { console.warn('Migration error:', e); }
+        }
+    })();
+    // ═══════════════════════════════════════════════════════════
+
+    // ============================================================
+    // 🔧 FUNCIONES DE EXTRACCIÓN DE PYTHON
+    // ============================================================
+    
+    function extractPythonFromHTML(htmlContent) {
+        if (!htmlContent || typeof htmlContent !== 'string') return '';
+        
+        const match = htmlContent.match(/\/\/\s*⚡\s*PYTHON_START\s*([\s\S]*?)\s*\/\/\s*⚡\s*PYTHON_END/);
+        if (match) {
+            let pythonCode = match[1]
+                .split('\n')
+                .map(line => line.replace(/^\/\/\s*/, ''))
+                .join('\n')
+                .trim();
+            return pythonCode;
+        }
+        
+        const altMatch = htmlContent.match(/\/\/\s*PYTHON\s*:\s*([\s\S]*?)\s*\/\/\s*END_PYTHON/);
+        if (altMatch) {
+            return altMatch[1].trim();
+        }
+        
+        return '';
+    }
+
+    function getPythonLineCount(htmlContent) {
+        const pyCode = extractPythonFromHTML(htmlContent);
+        if (!pyCode) return 0;
+        return pyCode.split('\n').filter(line => line.trim()).length;
+    }
+
+    function getHTMLLineCount(htmlContent) {
+        if (!htmlContent) return 0;
+        let clean = htmlContent.replace(/\/\/\s*⚡\s*PYTHON_START[\s\S]*?\/\/\s*⚡\s*PYTHON_END/g, '');
+        return clean.split('\n').length;
+    }
+
+    function getTotalLineCount(htmlContent) {
+        if (!htmlContent) return 0;
+        return htmlContent.split('\n').length;
+    }
+
+    // ============================================================
+    // 🔴 DETECCIÓN DE ERRORES DE SINTAXIS
+    // ============================================================
+    
+    function detectSyntaxErrors(code) {
+        const errors = new Set();
+        const lines = code.split('\n');
+        
+        // Detectar errores comunes en HTML/JS/Python embebido
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const lineNum = i + 1;
+            let hasError = false;
+            
+            // --- ERRORES DE HTML ---
+            
+            // 1. Etiqueta sin cerrar (solo para etiquetas comunes)
+            const unclosedTags = line.match(/<([a-zA-Z][a-zA-Z0-9]*)(?:\s[^>]*)?>/g);
+            if (unclosedTags) {
+                for (const tag of unclosedTags) {
+                    const tagName = tag.match(/<([a-zA-Z][a-zA-Z0-9]*)/)?.[1];
+                    if (tagName && !['br', 'hr', 'img', 'input', 'meta', 'link', 'area', 'base', 'col', 'command', 'embed', 'keygen', 'param', 'source', 'track', 'wbr'].includes(tagName.toLowerCase())) {
+                        // Buscar el cierre en líneas siguientes (simplificado)
+                        const closingTag = `</${tagName}>`;
+                        let found = false;
+                        for (let j = i + 1; j < Math.min(i + 20, lines.length); j++) {
+                            if (lines[j].includes(closingTag)) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found && !line.includes(closingTag)) {
+                            hasError = true;
+                        }
+                    }
+                }
+            }
+            
+            // 2. Comillas sin cerrar en HTML
+            const quoteCount = (line.match(/"/g) || []).length;
+            if (quoteCount % 2 !== 0) {
+                hasError = true;
+            }
+            
+            // 3. Paréntesis sin cerrar en atributos HTML
+            const parenOpen = (line.match(/\(/g) || []).length;
+            const parenClose = (line.match(/\)/g) || []).length;
+            if (parenOpen !== parenClose && (parenOpen > 0 || parenClose > 0)) {
+                hasError = true;
+            }
+            
+            // --- ERRORES DE JAVASCRIPT ---
+            
+            // 4. JavaScript: llaves sin cerrar (simplificado)
+            if (!line.trim().startsWith('//') && !line.trim().startsWith('/*') && !line.trim().startsWith('*')) {
+                const braceOpen = (line.match(/{/g) || []).length;
+                const braceClose = (line.match(/}/g) || []).length;
+                // Solo marcar si hay desbalance y no es parte de Python
+                if (braceOpen !== braceClose && (braceOpen > 0 || braceClose > 0)) {
+                    // Verificar que no sea parte de un objeto Python
+                    if (!line.includes('def ') && !line.includes('return ') && !line.includes('class ')) {
+                        hasError = true;
+                    }
+                }
+            }
+            
+            // 5. JavaScript: punto y coma faltante en asignaciones (heurístico)
+            if (line.trim() && !line.trim().endsWith(';') && !line.trim().endsWith('{') && 
+                !line.trim().endsWith('}') && !line.trim().endsWith('(') && !line.trim().endsWith(')') &&
+                !line.trim().endsWith('//') && !line.trim().startsWith('//') && !line.trim().startsWith('/*') &&
+                !line.trim().startsWith('*') && !line.trim().includes('function') && 
+                !line.trim().includes('if ') && !line.trim().includes('for ') && !line.trim().includes('while ') &&
+                !line.trim().includes('switch ') && !line.trim().includes('try ') && !line.trim().includes('catch ') &&
+                !line.trim().includes('with ') && line.trim().includes('=') && !line.trim().includes('=>')) {
+                // No marcar si es una declaración de variable sin asignación
+                if (!line.trim().match(/^(let|var|const)\s+[a-zA-Z_][a-zA-Z0-9_]*\s*;?$/)) {
+                    // No marcar si es Python
+                    if (!line.includes('def ') && !line.includes('return ') && !line.includes('class ')) {
+                        // hasError = true; // Comentado para no ser demasiado estricto
+                    }
+                }
+            }
+            
+            // 6. JavaScript: palabras clave mal escritas (común)
+            const jsKeywords = ['function', 'return', 'var', 'let', 'const', 'if', 'else', 'for', 'while', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally', 'throw', 'new', 'this', 'typeof', 'instanceof', 'void', 'delete', 'class', 'extends', 'super', 'import', 'export', 'default', 'from', 'async', 'await'];
+            for (const kw of jsKeywords) {
+                if (line.includes(kw + ' ') && !line.includes('"') && !line.includes("'") && !line.includes('//')) {
+                    // Verificar que no sea parte de Python
+                    if (!line.includes('def ') && !line.includes('return ') && !line.includes('class ')) {
+                        // hasError = true; // Muy estricto, comentado
+                    }
+                }
+            }
+            
+            // --- ERRORES DE PYTHON (dentro del bloque embebido) ---
+            
+            // Detectar si estamos dentro de un bloque Python
+            const isPythonBlock = line.includes('PYTHON_START') || 
+                                  (line.includes('//') && line.includes('def ') && !line.includes('function'));
+            
+            if (isPythonBlock || line.includes('def ') || line.includes('class ') || line.includes('import ')) {
+                // 7. Python: indentación inconsistente (detectar tabs vs espacios)
+                if (line.trim().startsWith('\t') && line.length > 0 && !line.trim().startsWith('#')) {
+                    // Marcar tabs en Python como advertencia
+                }
+                
+                // 8. Python: dos puntos faltantes en def/class/if/for/while
+                if ((line.includes('def ') || line.includes('class ') || 
+                     line.includes('if ') || line.includes('for ') || line.includes('while ')) &&
+                    !line.trim().endsWith(':') && !line.includes('//') && !line.includes('#')) {
+                    hasError = true;
+                }
+                
+                // 9. Python: paréntesis sin cerrar en llamadas a funciones
+                if (line.includes('(') && !line.includes(')') && !line.includes('//') && !line.includes('#')) {
+                    // Buscar cierre en líneas siguientes
+                    let found = false;
+                    for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+                        if (lines[j].includes(')')) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        hasError = true;
+                    }
+                }
+            }
+            
+            // --- ERRORES ESPECÍFICOS DE PYTHON EMBEBIDO ---
+            
+            // 10. Verificar que el código Python no tenga caracteres inválidos
+            if (line.includes('PYTHON_START') || line.includes('PYTHON_END')) {
+                // No marcar estas líneas
+                continue;
+            }
+            
+            if (line.includes('//') && (line.includes('def ') || line.includes('return '))) {
+                // Extraer el código Python real
+                const pyLine = line.replace(/\/\/\s*/, '');
+                // Verificar que sea Python válido (simplificado)
+                if (pyLine.includes('def ') && !pyLine.includes(':')) {
+                    hasError = true;
+                }
+            }
+            
+            if (hasError) {
+                errors.add(lineNum);
+            }
+        }
+        
+        return errors;
+    }
+
+    // ============================================================
+    // 📊 ACTUALIZACIÓN DE ESTADÍSTICAS CON ERRORES
+    // ============================================================
+    
+    function updateErrorDetection() {
+        const content = document.getElementById('app-editor').value;
+        errorLines = detectSyntaxErrors(content);
+        
+        // Actualizar badge de errores
+        const errorBadge = document.getElementById('error-badge');
+        const errorStatus = document.getElementById('error-count-status');
+        const errorCount = errorLines.size;
+        
+        if (errorBadge) {
+            errorBadge.textContent = `⚠️ ${errorCount} errors`;
+            errorBadge.style.background = errorCount > 0 ? 'rgba(255,68,102,0.25)' : 'rgba(0,255,136,0.15)';
+            errorBadge.style.color = errorCount > 0 ? 'var(--rd)' : 'var(--gr)';
+        }
+        
+        if (errorStatus) {
+            if (errorCount > 0) {
+                errorStatus.textContent = `🔴 ${errorCount} errors`;
+                errorStatus.className = 'error-count';
+            } else {
+                errorStatus.textContent = '✅ 0 errors';
+                errorStatus.className = 'error-count ok';
+            }
+        }
+        
+        // Actualizar números de línea con errores
+        updateLineNumbersWithErrors();
+    }
+
+    function updateLineNumbersWithErrors() {
+        const editor = document.getElementById('app-editor');
+        const lineNumContainer = document.getElementById('line-numbers');
+        if (!editor || !lineNumContainer) return;
+        
+        const lines = editor.value.split('\n');
+        const totalLines = lines.length;
+        const scrollTop = editor.scrollTop;
+        const lineHeight = 1.6 * 11.2;
+        const visibleHeight = editor.clientHeight;
+        const startLine = Math.floor(scrollTop / lineHeight);
+        const endLine = Math.min(totalLines, startLine + Math.ceil(visibleHeight / lineHeight) + 2);
+        
+        let html = '';
+        for (let i = 1; i <= totalLines; i++) {
+            const isActive = (i >= startLine && i <= endLine);
+            const hasError = errorLines.has(i);
+            const className = `ln${isActive ? ' active' : ''}${hasError ? ' error' : ''}`;
+            html += `<span class="${className}">${i}</span>`;
+        }
+        lineNumContainer.innerHTML = html;
+        lineNumContainer.scrollTop = scrollTop;
+        
+        // Marcar líneas con error en el editor (mediante overlay no es posible directamente)
+        // En su lugar, usamos el color de fondo en los números de línea
+    }
+
+    // ============================================================
+    // 🔧 FUNCIONES DE CONSTRUCCIÓN
+    // ============================================================
+
+    function buildCompleteApp(htmlContent, serverUrl) {
+        const pythonCode = extractPythonFromHTML(htmlContent);
+        
+        const bridge = `
+<script>
+(function() {
+    window.__serverUrl = ${JSON.stringify(serverUrl || '')};
+    window.__pyCode = ${JSON.stringify(pythonCode || '')};
+    
+    window.pyCall = async function(funcName, ...args) {
+        return new Promise((resolve, reject) => {
+            const msgId = Date.now() + '-' + Math.random().toString(36).slice(2);
+            const handler = (event) => {
+                if (event.data && event.data.type === 'pyResult' && event.data.id === msgId) {
+                    window.removeEventListener('message', handler);
+                    if (event.data.error) reject(new Error(event.data.error));
+                    else resolve(event.data.result);
+                }
+            };
+            window.addEventListener('message', handler);
+            window.parent.postMessage({
+                type: 'pyCall',
+                id: msgId,
+                func: funcName,
+                args: args,
+                serverUrl: window.__serverUrl,
+                pythonCode: window.__pyCode
+            }, '*');
+        });
+    };
+    
+    console.log('🔮 Quantum App ready');
+    console.log('   📡 Server:', window.__serverUrl || '⚠️ Not configured');
+    console.log('   🐍 Python functions:', (window.__pyCode || '').split('\\n').filter(l => l.includes('def ')).length);
+})();
+<\/script>
+        `;
+        
+        let finalHtml = htmlContent || '<!DOCTYPE html><html><body><h2>⚛️ Quantum App</h2></body></html>';
+        
+        if (finalHtml.includes('</head>')) {
+            finalHtml = finalHtml.replace('</head>', bridge + '</head>');
+        } else if (finalHtml.includes('<body')) {
+            finalHtml = finalHtml.replace('<body', bridge + '<body');
+        } else if (finalHtml.includes('<html>')) {
+            finalHtml = finalHtml.replace('<html>', '<html>' + bridge);
+        } else {
+            finalHtml = bridge + finalHtml;
+        }
+        
+        return finalHtml;
+    }
+
+    // ============================================================
+    // 📦 FUNCIONES DE PROYECTO
+    // ============================================================
+
+    function notify(msg, dur=3000) {
         const n = document.getElementById('notif');
         n.textContent = msg;
         n.classList.add('show');
@@ -333,45 +957,67 @@
 
     function setServerUrl(url) {
         if (!url) return;
+        currentServerUrl = url;
         const input = document.getElementById('server-url-input');
         if (input && input.value !== url) {
             input.value = url;
             input.style.background = '#0a4a2a';
             setTimeout(() => { if(input) input.style.background = '#0a0e1a'; }, 500);
             updateServerStatusText(url);
-            notify('✅ URL del servidor configurada automáticamente', 1500);
+            notify('✅ Server URL automatically configured', 1500);
             receivedUrl = true;
+            document.getElementById('server-status-text').textContent = `🌐 Server: ${url.replace(/https?:\/\//, '').substring(0, 30)}...`;
         }
     }
 
-    // ================== PROTECCIÓN CONTRA SOBRE-LECTURA ==================
-    // Se valida el origen de cada mensaje antes de procesarlo
+    function updateStats() {
+        const content = document.getElementById('app-editor').value;
+        const totalLines = getTotalLineCount(content);
+        const pyLines = getPythonLineCount(content);
+        const htmlLines = getHTMLLineCount(content);
+        
+        document.getElementById('line-count').textContent = `📄 ${totalLines} lines`;
+        document.getElementById('py-lines-badge').textContent = `🐍 ${pyLines} lines`;
+        document.getElementById('html-lines-badge').textContent = `🌐 ${htmlLines} lines`;
+        document.getElementById('py-extract-count').textContent = pyLines;
+        
+        const size = new Blob([content]).size;
+        document.getElementById('file-size-status').textContent = size > 1024 ? (size/1024).toFixed(1) + ' KB' : size + ' B';
+        
+        // Detectar errores
+        updateErrorDetection();
+    }
+
+    function updateCursorPosition() {
+        const editor = document.getElementById('app-editor');
+        const pos = editor.selectionStart;
+        const text = editor.value.substring(0, pos);
+        const lines = text.split('\n');
+        const line = lines.length;
+        const col = lines[lines.length - 1].length + 1;
+        document.getElementById('cursor-status').textContent = `Ln ${line}, Col ${col}`;
+    }
+
+    // ================== OVER-READING PROTECTION ==================
     window.addEventListener('message', async (event) => {
         const data = event.data;
         if (!data || typeof data !== 'object') return;
 
-        // --- Validación de origen (protect against over-reading) ---
         if (isEmbedded) {
-            // Si aún no tenemos un origen confiable, solo aceptamos el mensaje de conexión
             if (!parentOrigin) {
                 if (data.type === 'QCOL_REQUEST_STUDIO_CONNECTION') {
                     parentOrigin = event.origin;
-                    // Continuamos con el manejo normal del mensaje
                 } else {
-                    return; // cualquier otro mensaje antes de la conexión es ignorado
+                    return;
                 }
             } else if (event.origin !== parentOrigin) {
-                // Origen no autorizado
                 return;
             }
         } else {
-            // Modo standalone: solo aceptamos mensajes del mismo origen (o null para file://)
             const selfOrigin = window.location.origin;
             if (selfOrigin !== 'null' && event.origin !== selfOrigin) return;
             if (selfOrigin === 'null' && event.origin !== 'null') return;
         }
-
-        // --- A partir de aquí el mensaje proviene de un origen confiable ---
         
         if (data.type === 'QCOL_COMPILER_URL' && data.url) {
             setServerUrl(data.url);
@@ -386,21 +1032,19 @@
             isEmbedded = true;
             if (!parentOrigin) parentOrigin = event.origin;
             sendToParent({ type: 'QCOL_STUDIO_OPENED', version: '2.0', status: 'ready' });
-            notify('Conectado con Panel Fundador (origen validado)', 1500);
+            notify('Connected to Founder Panel (origin validated)', 1500);
             sendToParent({ type: 'QCOL_REQUEST_COMPILER_URL' });
             return;
         }
         
         if (data.type === 'QCOL_OPEN_APP_FROM_PUZZLE') {
-            const { appId, appName, pythonCode, htmlCode, serverUrl } = data;
+            const { appId, appName, pythonCode, htmlCode, serverUrl, content } = data;
             if (appId && appName) {
-                // ── PROTECCIÓN: guardar estado actual antes de cargar el app del puzzle
                 if (currentEditId && currentEditId !== appId) {
                     const prevIdx = projects.findIndex(p => p.id === currentEditId);
                     if (prevIdx !== -1) {
-                        projects[prevIdx].pythonCode = document.getElementById('python-editor').value;
-                        projects[prevIdx].htmlCode   = document.getElementById('html-editor').value;
-                        projects[prevIdx].name       = document.getElementById('project-name-input').value.trim() || projects[prevIdx].name;
+                        projects[prevIdx].content = document.getElementById('app-editor').value;
+                        projects[prevIdx].name = document.getElementById('project-name-input').value.trim() || projects[prevIdx].name;
                         saveProjects();
                     }
                 }
@@ -408,30 +1052,48 @@
                 if (existing) {
                     currentEditId = appId;
                     document.getElementById('project-name-input').value = existing.name;
-                    document.getElementById('python-editor').value      = '';
-                    document.getElementById('html-editor').value        = '';
-                    document.getElementById('python-editor').value      = existing.pythonCode || '';
-                    document.getElementById('html-editor').value        = existing.htmlCode   || '';
+                    document.getElementById('app-editor').value = '';
+                    document.getElementById('app-editor').value = existing.content || '';
                     if (existing.serverUrl) setServerUrl(existing.serverUrl);
                 } else {
+                    let unifiedContent = content;
+                    if (!unifiedContent && (pythonCode || htmlCode)) {
+                        unifiedContent = htmlCode || '<!DOCTYPE html><html><body><h1>App from Puzzle</h1></body></html>';
+                        if (pythonCode && pythonCode.trim()) {
+                            const pyLines = pythonCode.split('\n');
+                            let pyEmbed = '        // ⚡ PYTHON_START\n';
+                            pyLines.forEach(line => {
+                                pyEmbed += '        // ' + line + '\n';
+                            });
+                            pyEmbed += '        // ⚡ PYTHON_END\n';
+                            if (unifiedContent.includes('<script>')) {
+                                unifiedContent = unifiedContent.replace('<script>', '<script>\n' + pyEmbed);
+                            } else if (unifiedContent.includes('</body>')) {
+                                unifiedContent = unifiedContent.replace('</body>', '<script>\n' + pyEmbed + '\n<\/script>\n</body>');
+                            } else {
+                                unifiedContent = unifiedContent + '\n<script>\n' + pyEmbed + '\n<\/script>\n';
+                            }
+                        }
+                    }
+                    
                     const newProj = {
                         id: appId,
                         name: appName,
-                        pythonCode: pythonCode || '# Código Python\n',
-                        htmlCode: htmlCode || '<!DOCTYPE html>\n<html>\n<body>\n<h1>App desde Puzzle</h1>\n</body>\n</html>',
+                        content: unifiedContent || '<!DOCTYPE html>\n<html>\n<body>\n<h1>App from Puzzle</h1>\n</body>\n</html>',
+                        pythonCode: pythonCode || '',
+                        htmlCode: htmlCode || '',
                         serverUrl: serverUrl || '',
                         createdAt: Date.now()
                     };
                     projects.push(newProj);
                     currentEditId = appId;
                     document.getElementById('project-name-input').value = newProj.name;
-                    document.getElementById('python-editor').value      = '';
-                    document.getElementById('html-editor').value        = '';
-                    document.getElementById('python-editor').value      = newProj.pythonCode;
-                    document.getElementById('html-editor').value        = newProj.htmlCode;
+                    document.getElementById('app-editor').value = '';
+                    document.getElementById('app-editor').value = newProj.content;
                     if (newProj.serverUrl) setServerUrl(newProj.serverUrl);
                     saveProjects();
                 }
+                updateStats();
                 showScreen('editor');
                 sendToParent({ type: 'QCOL_STUDIO_APP_LOADED', appId: currentEditId });
             }
@@ -439,46 +1101,43 @@
         }
         
         if (data.type === 'QCOL_GET_APPS') {
-            const apps = projects.map(p => ({ id: p.id, name: p.name, serverUrl: p.serverUrl, createdAt: p.createdAt }));
+            const apps = projects.map(p => ({ 
+                id: p.id, 
+                name: p.name, 
+                content: p.content,
+                serverUrl: p.serverUrl, 
+                createdAt: p.createdAt 
+            }));
             sendToParent({ type: 'QCOL_APPS_LIST', apps });
             return;
         }
 
         if (data.type === 'QCOL_REQUEST_COMPILE') {
-            const { requestId, appId, appName, pythonCode, htmlCode, serverUrl } = data;
+            const { requestId, appId, appName, pythonCode, htmlCode, serverUrl, content } = data;
             try {
                 const finalServerUrl = serverUrl || localStorage.getItem('qcol_colab_url') || '';
                 
-                const bridge = `
-                <script>
-                window.__serverUrl = ${JSON.stringify(finalServerUrl)};
-                window.__pyCode = ${JSON.stringify(pythonCode || '# Python vacío')};
-                window.pyCall = async (funcName, ...args) => {
-                    return new Promise((resolve, reject) => {
-                        const msgId = Date.now() + '-' + Math.random();
-                        const handler = (event) => {
-                            if (event.data.type === 'pyResult' && event.data.id === msgId) {
-                                window.removeEventListener('message', handler);
-                                if (event.data.error) reject(new Error(event.data.error));
-                                else resolve(event.data.result);
-                            }
-                        };
-                        window.addEventListener('message', handler);
-                        window.parent.postMessage({ type: 'pyCall', id: msgId, func: funcName, args: args, serverUrl: window.__serverUrl, pythonCode: window.__pyCode }, '*');
-                    });
-                };
-                console.log("Bridge listo, servidor:", window.__serverUrl);
-                <\/script>
-                `;
-                
-                let finalHtml = htmlCode || '<!DOCTYPE html><html><body><h1>App sin interfaz</h1></body></html>';
-                if (finalHtml.includes('<head>')) {
-                    finalHtml = finalHtml.replace('<head>', '<head>' + bridge);
-                } else if (finalHtml.includes('<html>')) {
-                    finalHtml = finalHtml.replace('<html>', '<html><head>' + bridge + '</head>');
-                } else {
-                    finalHtml = bridge + finalHtml;
+                let unifiedContent = content;
+                if (!unifiedContent && (pythonCode || htmlCode)) {
+                    unifiedContent = htmlCode || '<!DOCTYPE html><html><body><h1>App without interface</h1></body></html>';
+                    if (pythonCode && pythonCode.trim()) {
+                        const pyLines = pythonCode.split('\n');
+                        let pyEmbed = '        // ⚡ PYTHON_START\n';
+                        pyLines.forEach(line => {
+                            pyEmbed += '        // ' + line + '\n';
+                        });
+                        pyEmbed += '        // ⚡ PYTHON_END\n';
+                        if (unifiedContent.includes('<script>')) {
+                            unifiedContent = unifiedContent.replace('<script>', '<script>\n' + pyEmbed);
+                        } else if (unifiedContent.includes('</body>')) {
+                            unifiedContent = unifiedContent.replace('</body>', '<script>\n' + pyEmbed + '\n<\/script>\n</body>');
+                        } else {
+                            unifiedContent = unifiedContent + '\n<script>\n' + pyEmbed + '\n<\/script>\n';
+                        }
+                    }
                 }
+                
+                const finalHtml = buildCompleteApp(unifiedContent || '', finalServerUrl);
                 
                 if (event.source) {
                     event.source.postMessage({
@@ -508,13 +1167,12 @@
     }
 
     function saveProjects() {
-        // 🛡️ Protección contra sobreescritura: guardamos un backup de la versión anterior
-        const previousBackup = localStorage.getItem('quantum_apps_repo_v2');
+        const previousBackup = localStorage.getItem('quantum_apps_repo_v3');
         if (previousBackup) {
-            localStorage.setItem('quantum_apps_repo_v2_backup', previousBackup);
+            localStorage.setItem('quantum_apps_repo_v3_backup', previousBackup);
         }
 
-        localStorage.setItem('quantum_apps_repo_v2', JSON.stringify(projects));
+        localStorage.setItem('quantum_apps_repo_v3', JSON.stringify(projects));
         if (isEmbedded && currentEditId && parentOrigin) {
             const proj = projects.find(p => p.id === currentEditId);
             if (proj) notifyParentAboutChange('save', currentEditId, { name: proj.name, serverUrl: proj.serverUrl });
@@ -522,14 +1180,81 @@
     }
 
     function loadProjects() {
-        const stored = localStorage.getItem('quantum_apps_repo_v2');
-        if (stored) try { projects = JSON.parse(stored); } catch(e) { projects = []; }
+        let stored = localStorage.getItem('quantum_apps_repo_v3');
+        if (stored) {
+            try { 
+                projects = JSON.parse(stored); 
+                let needsUpdate = false;
+                projects = projects.map(p => {
+                    if (!p.content) {
+                        needsUpdate = true;
+                        const pythonCode = p.pythonCode || '';
+                        const htmlCode = p.htmlCode || '';
+                        let content = htmlCode || '<!DOCTYPE html><html><body><h2>⚛️ Quantum App</h2></body></html>';
+                        if (pythonCode && pythonCode.trim() && !content.includes('PYTHON_START')) {
+                            const pyLines = pythonCode.split('\n');
+                            let pyEmbed = '        // ⚡ PYTHON_START\n';
+                            pyLines.forEach(line => {
+                                pyEmbed += '        // ' + line + '\n';
+                            });
+                            pyEmbed += '        // ⚡ PYTHON_END\n';
+                            if (content.includes('<script>')) {
+                                content = content.replace('<script>', '<script>\n' + pyEmbed);
+                            } else if (content.includes('</body>')) {
+                                content = content.replace('</body>', '<script>\n' + pyEmbed + '\n<\/script>\n</body>');
+                            } else {
+                                content = content + '\n<script>\n' + pyEmbed + '\n<\/script>\n';
+                            }
+                        }
+                        return { ...p, content: content };
+                    }
+                    return p;
+                });
+                if (needsUpdate) saveProjects();
+            } catch(e) { 
+                projects = []; 
+            }
+        }
+        
         if (!projects.length) {
+            const demoPython = `def greet(name):
+    return f"Hello {name}! from Python on quantum server 🧪"
+
+def add(a, b):
+    return a + b`;
+
+            const demoHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="background:#0a0e1a; color:white; font-family:monospace; padding:1rem;">
+    <h2>⚛️ Interactive Demo</h2>
+    <input id="nameInput" placeholder="Your name" style="padding:0.3rem; background:#1a2a48; border:1px solid #2a4a68; color:white; border-radius:4px;">
+    <button onclick="callGreet()" style="background:#0088ff; border:none; padding:0.3rem 0.8rem; border-radius:4px; color:white; cursor:pointer;">Greet</button>
+    <p id="result"></p>
+    <script>
+        // ⚡ PYTHON_START
+        // def greet(name):
+        //     return f"Hello {name}! from Python on quantum server 🧪"
+        // 
+        // def add(a, b):
+        //     return a + b
+        // ⚡ PYTHON_END
+        
+        window.callGreet = async () => {
+            const name = document.getElementById('nameInput').value;
+            const res = await window.pyCall("greet", name);
+            document.getElementById('result').innerText = res;
+        };
+    <\/script>
+</body>
+</html>`;
+            
             projects.push({
                 id: generateId(),
-                name: "Demo: Saludo cuántico",
-                pythonCode: `def saludar(nombre):\n    return f"¡Hola {nombre}! desde Python en servidor cuántico 🧪"\n\ndef suma(a,b):\n    return a+b`,
-                htmlCode: `<!DOCTYPE html>\n<html>\n<head><meta charset="UTF-8"></head>\n<body style="background:#0a0e1a; color:white; font-family:monospace; padding:1rem;">\n<h2>Demo Interactiva</h2>\n<input id="nameInput" placeholder="Tu nombre" style="padding:0.3rem;">\n<button onclick="callGreet()">Saludar</button>\n<p id="result"></p>\n<script>\nwindow.callGreet = async () => {\n    const name = document.getElementById('nameInput').value;\n    const res = await window.pyCall("saludar", name);\n    document.getElementById('result').innerText = res;\n};\n<\/script>\n</body>\n</html>`,
+                name: "Demo: Quantum greeting",
+                content: demoHtml,
+                pythonCode: demoPython,
+                htmlCode: demoHtml,
                 serverUrl: "",
                 createdAt: Date.now()
             });
@@ -542,15 +1267,20 @@
         if (!grid) return;
         grid.innerHTML = '';
         projects.forEach(proj => {
+            const pyCount = getPythonLineCount(proj.content || '');
+            const totalLines = getTotalLineCount(proj.content || '');
             const card = document.createElement('div');
             card.className = 'project-card';
             card.innerHTML = `
                 <div class="project-name">📦 ${escapeHtml(proj.name)}</div>
+                <div style="font-size:0.55rem;color:var(--mu);font-family:monospace;margin-bottom:0.4rem;">
+                    🐍 ${pyCount} Python lines · 📄 ${totalLines} lines total
+                </div>
                 <div class="card-actions">
-                    <button class="btn-secondary edit-proj" data-id="${proj.id}">✏️ Editar</button>
-                    <button class="btn-secondary run-proj" data-id="${proj.id}">▶ Ejecutar</button>
-                    <button class="btn-secondary btn-pending launch-proj" data-id="${proj.id}">📤 Lanzar</button>
-                    <button class="btn-secondary delete-proj" data-id="${proj.id}">🗑 Eliminar</button>
+                    <button class="btn-secondary edit-proj" data-id="${proj.id}">✏️ Edit</button>
+                    <button class="btn-secondary run-proj" data-id="${proj.id}">▶ Run</button>
+                    <button class="btn-secondary btn-pending launch-proj" data-id="${proj.id}">📤 Launch</button>
+                    <button class="btn-secondary delete-proj" data-id="${proj.id}">🗑 Delete</button>
                 </div>
             `;
             grid.appendChild(card);
@@ -561,48 +1291,105 @@
         document.querySelectorAll('.delete-proj').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); deleteProject(btn.getAttribute('data-id')); }));
     }
 
+    // ============================================================
+    // 🔄 FUNCIÓN SEND TO PENDING CON SINCRONIZACIÓN A LA NUBE
+    // ============================================================
     function sendToPending(id) {
         const proj = projects.find(p => p.id === id);
         if (!proj) {
-            notify("❌ Proyecto no encontrado");
+            notify("❌ Project not found");
             return;
         }
         
-        const message = {
-            type: 'QCOL_LAUNCH_QUANTUM_APP',
-            appId: proj.id,
-            appTitle: proj.name,
-            appMetadata: {
-                name: proj.name,
-                pythonCode: proj.pythonCode,
-                htmlCode: proj.htmlCode,
-                serverUrl: proj.serverUrl || localStorage.getItem('qcol_colab_url') || '',
-                createdAt: proj.createdAt
-            }
+        const pythonCode = extractPythonFromHTML(proj.content || '');
+        
+        let pendingApps = JSON.parse(localStorage.getItem('qcol_pending_apps') || '[]');
+        const existingIndex = pendingApps.findIndex(entry => entry.id === proj.id);
+        const newEntry = {
+            id: proj.id,
+            name: proj.name,
+            content: proj.content,
+            pythonCode: pythonCode,
+            htmlCode: proj.content,
+            serverUrl: proj.serverUrl,
+            timestamp: Date.now()
         };
+        if (existingIndex !== -1) {
+            pendingApps[existingIndex] = newEntry;
+        } else {
+            pendingApps.push(newEntry);
+        }
+        localStorage.setItem('qcol_pending_apps', JSON.stringify(pendingApps));
+        
+        if (window.parent !== window) {
+            const message = {
+                type: 'QCOL_STUDIO_SYNC_APP',
+                appId: proj.id,
+                appData: {
+                    id: proj.id,
+                    name: proj.name,
+                    title: proj.name,
+                    description: '',
+                    tags: '',
+                    content: proj.content,
+                    pythonCode: pythonCode,
+                    htmlCode: proj.content,
+                    serverUrl: proj.serverUrl || localStorage.getItem('qcol_colab_url') || '',
+                    duration: 8
+                }
+            };
+            
+            if (parentOrigin) {
+                window.parent.postMessage(message, parentOrigin);
+                notify(`☁️ Enviando "${proj.name}" a la nube...`);
+            } else {
+                window.parent.postMessage(message, '*');
+                notify(`☁️ Enviando "${proj.name}" a la nube...`);
+            }
+        } else {
+            if (window.quantumSync && window.quantumSync.isReady) {
+                try {
+                    window.quantumSync.submitApp({
+                        id: proj.id,
+                        name: proj.name,
+                        title: proj.name,
+                        description: '',
+                        tags: '',
+                        content: proj.content,
+                        pythonCode: pythonCode,
+                        htmlCode: proj.content,
+                        serverUrl: proj.serverUrl || localStorage.getItem('qcol_colab_url') || '',
+                        duration: 8
+                    }).then(() => {
+                        notify(`☁️ App "${proj.name}" enviada a la nube (pendiente)`);
+                    }).catch((err) => {
+                        console.warn('⚠️ No se pudo sincronizar con la nube:', err);
+                        notify(`📦 App "${proj.name}" guardada localmente (sin conexión a la nube)`);
+                    });
+                } catch (error) {
+                    console.warn('⚠️ No se pudo sincronizar con la nube:', error);
+                    notify(`📦 App "${proj.name}" guardada localmente (sin conexión a la nube)`);
+                }
+            } else {
+                notify(`📦 App "${proj.name}" guardada localmente.`, 3000);
+            }
+        }
         
         if (window.parent !== window && parentOrigin) {
-            sendToParent(message);
-            notify(`🚀 App "${proj.name}" enviada a la lista de pendientes del Fundador`, 2500);
-        } else {
-            let pendingApps = JSON.parse(localStorage.getItem('qcol_pending_apps') || '[]');
-            // 🛡️ Protección contra duplicados: si ya existe una entrada con el mismo id, la actualizamos
-            const existingIndex = pendingApps.findIndex(entry => entry.id === proj.id);
-            const newEntry = {
-                id: proj.id,
-                name: proj.name,
-                pythonCode: proj.pythonCode,
-                htmlCode: proj.htmlCode,
-                serverUrl: proj.serverUrl,
-                timestamp: Date.now()
+            const launchMessage = {
+                type: 'QCOL_LAUNCH_QUANTUM_APP',
+                appId: proj.id,
+                appTitle: proj.name,
+                appMetadata: {
+                    name: proj.name,
+                    content: proj.content,
+                    pythonCode: pythonCode,
+                    htmlCode: proj.content,
+                    serverUrl: proj.serverUrl || localStorage.getItem('qcol_colab_url') || '',
+                    createdAt: proj.createdAt
+                }
             };
-            if (existingIndex !== -1) {
-                pendingApps[existingIndex] = newEntry;
-            } else {
-                pendingApps.push(newEntry);
-            }
-            localStorage.setItem('qcol_pending_apps', JSON.stringify(pendingApps));
-            notify(`📦 App "${proj.name}" guardada en pendientes local. Conecta con el Panel Fundador para sincronizar.`, 3000);
+            sendToParent(launchMessage);
         }
     }
 
@@ -610,43 +1397,38 @@
         const proj = projects.find(p => p.id === id);
         if (!proj) return;
 
-        // ── Anti-contaminación: auto-guardar anterior SOLO si existe en el array
-        // y su contenido en el editor no coincide con otro proyecto (evita propagación)
         if (currentEditId && currentEditId !== id) {
             const prevIdx = projects.findIndex(p => p.id === currentEditId);
             if (prevIdx !== -1) {
-                const pyVal   = document.getElementById('python-editor').value;
-                const htmlVal = document.getElementById('html-editor').value;
+                const contentVal = document.getElementById('app-editor').value;
                 const nameVal = document.getElementById('project-name-input').value.trim();
                 const isContaminated = projects.some((p, i) =>
-                    i !== prevIdx && p.pythonCode === pyVal && p.htmlCode === htmlVal);
+                    i !== prevIdx && p.content === contentVal && contentVal.length > 10);
                 if (!isContaminated) {
-                    projects[prevIdx].pythonCode = pyVal;
-                    projects[prevIdx].htmlCode   = htmlVal;
-                    projects[prevIdx].name       = nameVal || projects[prevIdx].name;
+                    projects[prevIdx].content = contentVal;
+                    projects[prevIdx].name = nameVal || projects[prevIdx].name;
                     saveProjects();
                 }
             }
         }
 
-        // ── Cargar snapshot del array (fuente de verdad), nunca del DOM
-        currentEditId = id;
         document.getElementById('project-name-input').value = '';
-        document.getElementById('python-editor').value      = '';
-        document.getElementById('html-editor').value        = '';
+        document.getElementById('app-editor').value = '';
+
+        currentEditId = id;
         document.getElementById('project-name-input').value = proj.name;
-        document.getElementById('python-editor').value      = proj.pythonCode || '';
-        document.getElementById('html-editor').value        = proj.htmlCode   || '';
+        document.getElementById('app-editor').value = proj.content || '';
+        updateStats();
         showScreen('editor');
     }
 
     async function updateServerStatusText(url) {
         const statusSpan = document.getElementById('server-status');
-        if (!url) { statusSpan.innerHTML = '⚠️ Sin URL'; remoteSessionStatus = false; return; }
-        statusSpan.innerHTML = '⏳ probando...';
+        if (!url) { statusSpan.innerHTML = '⚠️ No URL'; remoteSessionStatus = false; return; }
+        statusSpan.innerHTML = '⏳ testing...';
         const ok = await testBackendConnection(url);
-        if (ok) { statusSpan.innerHTML = '✅ servidor activo'; remoteSessionStatus = true; }
-        else { statusSpan.innerHTML = '❌ no responde'; remoteSessionStatus = false; }
+        if (ok) { statusSpan.innerHTML = '✅ server active'; remoteSessionStatus = true; }
+        else { statusSpan.innerHTML = '❌ no response'; remoteSessionStatus = false; }
     }
 
     async function testBackendConnection(baseUrl) {
@@ -666,7 +1448,7 @@
     }
 
     async function executePythonRemote(code, serverUrl) {
-        if (!serverUrl) throw new Error("No hay URL de servidor");
+        if (!serverUrl) throw new Error("No server URL");
         const base = serverUrl.replace(/\/+$/, '');
         const isHF = base.includes('hf.space') || base.includes('huggingface');
         let url, body;
@@ -687,17 +1469,15 @@
         return output;
     }
 
-    // Handler para llamadas desde los iframes (pyCall) - mismo origen, no necesita token
+    // Handler for calls from iframes (pyCall)
     window.addEventListener('message', async (event) => {
-        // Solo procesamos pyCall si el origen es el mismo (blob:iframe origen es el mismo)
         if (event.data.type === 'pyCall') {
-            // Verificar origen para evitar abusos
             if (isEmbedded && parentOrigin && event.origin !== parentOrigin) return;
             if (!isEmbedded && event.origin !== window.location.origin && window.location.origin !== 'null') return;
             
             const { id, func, args, serverUrl, pythonCode } = event.data;
             try {
-                if (!serverUrl) throw new Error("Falta URL del servidor");
+                if (!serverUrl) throw new Error("Missing server URL");
                 const fullCode = `${pythonCode}\nimport json\n_result = ${func}(*${JSON.stringify(args)})\nprint(json.dumps(_result, ensure_ascii=False))`;
                 const output = await executePythonRemote(fullCode, serverUrl);
                 let result = output.trim();
@@ -713,40 +1493,14 @@
         }
     });
 
-    async function buildAppBlob(pythonCode, htmlCode, serverUrl) {
-        const bridge = `
-        <script>
-        window.__serverUrl = ${JSON.stringify(serverUrl)};
-        window.__pyCode = ${JSON.stringify(pythonCode)};
-        window.pyCall = async (funcName, ...args) => {
-            return new Promise((resolve, reject) => {
-                const msgId = Date.now() + '-' + Math.random();
-                const handler = (event) => {
-                    if (event.data.type === 'pyResult' && event.data.id === msgId) {
-                        window.removeEventListener('message', handler);
-                        if (event.data.error) reject(new Error(event.data.error));
-                        else resolve(event.data.result);
-                    }
-                };
-                window.addEventListener('message', handler);
-                window.parent.postMessage({ type: 'pyCall', id: msgId, func: funcName, args: args, serverUrl: window.__serverUrl, pythonCode: window.__pyCode }, '*');
-            });
-        };
-        console.log("Bridge listo, servidor:", window.__serverUrl);
-        <\/script>
-        `;
-        let finalHtml = htmlCode;
-        if (finalHtml.includes('<head>')) finalHtml = finalHtml.replace('<head>', '<head>' + bridge);
-        else if (finalHtml.includes('<html>')) finalHtml = finalHtml.replace('<html>', '<html><head>' + bridge + '</head>');
-        else finalHtml = bridge + finalHtml;
+    async function buildAppBlob(content, serverUrl) {
+        const finalHtml = buildCompleteApp(content, serverUrl);
         const blob = new Blob([finalHtml], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         return { blobUrl: url, revoke: () => URL.revokeObjectURL(url) };
     }
 
     async function launchProject(id) {
-        // ── PROTECCIÓN: cargar SIEMPRE desde el array projects, nunca del editor
-        // El editor puede tener contenido de otro proyecto si no se guardó
         const proj = projects.find(p => p.id === id);
         if (!proj) return;
         showScreen('runner');
@@ -758,13 +1512,13 @@
         
         const serverActive = serverToUse && await testBackendConnection(serverToUse);
         if (serverActive) {
-            modeSpan.innerHTML = '<span class="status-dot active"></span> Remoto (servidor activo)';
+            modeSpan.innerHTML = '<span class="status-dot active"></span> Remote (server active)';
             dot.className = 'status-dot active';
         } else {
-            modeSpan.innerHTML = '<span class="status-dot"></span> ⚠️ Sin servidor';
+            modeSpan.innerHTML = '<span class="status-dot"></span> ⚠️ No server';
             dot.className = 'status-dot';
         }
-        const { blobUrl, revoke } = await buildAppBlob(proj.pythonCode, proj.htmlCode, serverToUse);
+        const { blobUrl, revoke } = await buildAppBlob(proj.content, serverToUse);
         const iframe = document.getElementById('app-iframe');
         iframe.src = blobUrl;
         iframe.onload = () => revoke();
@@ -772,11 +1526,8 @@
 
     async function runPreview() {
         const serverUrl = localStorage.getItem('qcol_colab_url') || '';
-        const { blobUrl, revoke } = await buildAppBlob(
-            document.getElementById('python-editor').value,
-            document.getElementById('html-editor').value,
-            serverUrl
-        );
+        const content = document.getElementById('app-editor').value;
+        const { blobUrl, revoke } = await buildAppBlob(content, serverUrl);
         const iframe = document.getElementById('preview-iframe');
         iframe.src = blobUrl;
         iframe.onload = () => revoke();
@@ -794,101 +1545,239 @@
         document.getElementById('runner-screen').classList.add('hidden');
         if (screenId === 'repo') {
             document.getElementById('repo-screen').classList.remove('hidden');
-            // ── Al volver al repositorio, limpiar el editor
-            // Evita que al abrir otro proyecto vea residuos del anterior
             currentEditId = null;
             document.getElementById('project-name-input').value = '';
-            document.getElementById('python-editor').value      = '';
-            document.getElementById('html-editor').value        = '';
+            document.getElementById('app-editor').value = '';
+            updateStats();
         } else if (screenId === 'editor') {
             document.getElementById('editor-screen').classList.remove('hidden');
+            updateStats();
+            setTimeout(() => updateLineNumbersWithErrors(), 50);
         } else if (screenId === 'runner') {
             document.getElementById('runner-screen').classList.remove('hidden');
         }
     }
 
+    // ============================================================
+    // 🔄 NUEVAS FUNCIONES: DESCARGAR, COPIAR, SUBIR, BORRAR
+    // ============================================================
+    
+    function downloadCode() {
+        const content = document.getElementById('app-editor').value;
+        const name = document.getElementById('project-name-input').value.trim() || 'quantum-app';
+        const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${name.replace(/[^a-zA-Z0-9-_]/g, '_')}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        notify(`📥 Descargado: ${a.download}`, 2000);
+    }
+
+    async function copyCode() {
+        const content = document.getElementById('app-editor').value;
+        try {
+            await navigator.clipboard.writeText(content);
+            notify('📋 Código copiado al portapapeles', 2000);
+        } catch (err) {
+            const editor = document.getElementById('app-editor');
+            editor.select();
+            document.execCommand('copy');
+            notify('📋 Código copiado (fallback)', 2000);
+        }
+    }
+
+    function uploadCode() {
+        document.getElementById('file-input').click();
+    }
+
+    function handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const content = e.target.result;
+            document.getElementById('app-editor').value = content;
+            updateStats();
+            notify(`📤 Archivo "${file.name}" cargado (${(file.size/1024).toFixed(1)} KB)`, 3000);
+        };
+        reader.onerror = () => {
+            notify('❌ Error al leer el archivo', 3000);
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+    }
+
+    function clearCode() {
+        if (confirm('🗑️ ¿Borrar todo el código del editor?')) {
+            document.getElementById('app-editor').value = '';
+            updateStats();
+            notify('🗑️ Código borrado', 1500);
+        }
+    }
+
+    // ============================================================
+    // 🔄 INTEGRACIÓN CON SUPABASE SYNC
+    // ============================================================
     function saveCurrentEdit() {
-        const nameVal  = document.getElementById('project-name-input').value.trim();
-        const pyVal    = document.getElementById('python-editor').value;
-        const htmlVal  = document.getElementById('html-editor').value;
-        // serverUrl viene del Founder automáticamente, no del input (oculto)
-        const urlVal   = localStorage.getItem('qcol_colab_url') || '';
+        const nameVal = document.getElementById('project-name-input').value.trim();
+        const contentVal = document.getElementById('app-editor').value;
+        const urlVal = localStorage.getItem('qcol_colab_url') || '';
+        const pythonCode = extractPythonFromHTML(contentVal);
+
+        if (currentEditId) {
+            const contaminated = projects.some(p => 
+                p.id !== currentEditId && 
+                p.content === contentVal &&
+                contentVal.length > 10
+            );
+            if (contaminated) {
+                notify("⚠️ Editor contains code from another project. Switch projects to fix.");
+                return;
+            }
+        }
 
         if (!currentEditId) {
-            // Crear nuevo proyecto
-            if (!nameVal) { notify("Ingresa un nombre"); return; }
-            const newId  = generateId();
+            if (!nameVal) { notify("Enter a name"); return; }
+            const newId = generateId();
             const newProj = {
-                id:         newId,
-                name:       nameVal,
-                pythonCode: pyVal,
-                htmlCode:   htmlVal,
-                serverUrl:  urlVal,
-                createdAt:  Date.now()
+                id: newId,
+                name: nameVal,
+                content: contentVal,
+                pythonCode: pythonCode,
+                htmlCode: contentVal,
+                serverUrl: urlVal,
+                createdAt: Date.now()
             };
             projects.push(newProj);
             currentEditId = newId;
             saveProjects();
-            notify(`Proyecto "${nameVal}" creado`);
+            notify(`Project "${nameVal}" created`);
+            
+            if (window.quantumSync && window.quantumSync.isReady) {
+                try {
+                    window.quantumSync.submitApp({
+                        id: newId,
+                        name: nameVal,
+                        title: nameVal,
+                        description: '',
+                        tags: '',
+                        content: contentVal,
+                        pythonCode: pythonCode,
+                        htmlCode: contentVal,
+                        serverUrl: urlVal,
+                        duration: 8
+                    }).then(() => {
+                        notify('☁️ App sincronizada con la nube (pendiente)');
+                    }).catch((err) => {
+                        console.warn('⚠️ No se pudo sincronizar con la nube:', err);
+                    });
+                } catch (error) {
+                    console.warn('⚠️ No se pudo sincronizar con la nube:', error);
+                }
+            }
+            
             showScreen('repo');
             renderRepository();
             return;
         }
 
-        // Actualizar proyecto existente — verificar que el id aún existe
         const idx = projects.findIndex(p => p.id === currentEditId);
         if (idx === -1) {
-            notify("❌ Error: proyecto no encontrado. Crea uno nuevo.");
+            notify("❌ Error: project not found. Create a new one.");
             currentEditId = null;
             return;
         }
-        // ── PROTECCIÓN: solo actualizar el proyecto cuyo id coincide exactamente
-        // Nunca tocar otros proyectos
-        projects[idx].name       = nameVal || projects[idx].name;
-        projects[idx].pythonCode = pyVal;
-        projects[idx].htmlCode   = htmlVal;
-        projects[idx].serverUrl  = urlVal;
+        projects[idx].name = nameVal || projects[idx].name;
+        projects[idx].content = contentVal;
+        projects[idx].pythonCode = pythonCode;
+        projects[idx].htmlCode = contentVal;
+        projects[idx].serverUrl = urlVal;
         saveProjects();
-        notify("Proyecto guardado");
+        notify("Project saved");
+        
+        if (window.quantumSync && window.quantumSync.isReady) {
+            try {
+                window.quantumSync.submitApp({
+                    id: currentEditId,
+                    name: nameVal || projects[idx].name,
+                    title: nameVal || projects[idx].name,
+                    description: '',
+                    tags: '',
+                    content: contentVal,
+                    pythonCode: pythonCode,
+                    htmlCode: contentVal,
+                    serverUrl: urlVal,
+                    duration: 8
+                }).then(() => {
+                    notify('☁️ App sincronizada con la nube (pendiente)');
+                }).catch((err) => {
+                    console.warn('⚠️ No se pudo sincronizar con la nube:', err);
+                });
+            } catch (error) {
+                console.warn('⚠️ No se pudo sincronizar con la nube:', error);
+            }
+        }
+        
         showScreen('repo');
         renderRepository();
     }
 
     function deleteProject(id) {
-        if (projects.length === 1) { notify("Debe haber al menos un proyecto"); return; }
-        if (confirm("¿Eliminar aplicación?")) {
+        if (projects.length === 1) { notify("There must be at least one project"); return; }
+        if (confirm("Delete application?")) {
             const deleted = projects.find(p => p.id === id);
             projects = projects.filter(p => p.id !== id);
             if (currentEditId === id) currentEditId = null;
             saveProjects();
             renderRepository();
-            notify("Proyecto eliminado");
+            notify("Project deleted");
             if (isEmbedded && deleted && parentOrigin) sendToParent({ type: 'QCOL_APP_DELETED', appId: id });
         }
     }
 
     function startNewProject() {
-        // ── Solo auto-guardar si el proyecto existe y el editor no tiene contenido contaminado
         if (currentEditId) {
             const prevIdx = projects.findIndex(p => p.id === currentEditId);
             if (prevIdx !== -1) {
-                const pyVal   = document.getElementById('python-editor').value;
-                const htmlVal = document.getElementById('html-editor').value;
+                const contentVal = document.getElementById('app-editor').value;
                 const nameVal = document.getElementById('project-name-input').value.trim();
                 const isContaminated = projects.some((p, i) =>
-                    i !== prevIdx && p.pythonCode === pyVal && p.htmlCode === htmlVal);
+                    i !== prevIdx && p.content === contentVal && contentVal.length > 10);
                 if (!isContaminated) {
-                    projects[prevIdx].pythonCode = pyVal;
-                    projects[prevIdx].htmlCode   = htmlVal;
-                    projects[prevIdx].name       = nameVal || projects[prevIdx].name;
+                    projects[prevIdx].content = contentVal;
+                    projects[prevIdx].name = nameVal || projects[prevIdx].name;
                     saveProjects();
                 }
             }
         }
         currentEditId = null;
-        document.getElementById('project-name-input').value = 'Nueva app cuántica';
-        document.getElementById('python-editor').value = '# Código Python remoto\ndef mi_funcion(param):\n    return f"Resultado: {param}"';
-        document.getElementById('html-editor').value = '<!DOCTYPE html>\n<html>\n<head><meta charset="UTF-8"></head>\n<body style="background:#0a0e1a;color:white;font-family:sans-serif;padding:1.5rem;">\n<h2>⚛️ Mi App Cuántica</h2>\n<button onclick="llamar()">Ejecutar</button>\n<p id="out"></p>\n<script>\nasync function llamar(){\n  const r = await window.pyCall("mi_funcion","hola");\n  document.getElementById("out").innerText = r;\n}\n<\/script>\n</body>\n</html>';
+        document.getElementById('project-name-input').value = 'New quantum app';
+        document.getElementById('app-editor').value = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="background:#0a0e1a;color:white;font-family:sans-serif;padding:1.5rem;">
+    <h2>⚛️ My Quantum App</h2>
+    <button onclick="call()" style="background:#0088ff;border:none;padding:0.5rem 1rem;border-radius:6px;color:white;cursor:pointer;">Execute</button>
+    <p id="out"></p>
+    <script>
+        // ⚡ PYTHON_START
+        // def my_function(param):
+        //     return f"Result: {param}"
+        // ⚡ PYTHON_END
+        
+        async function call() {
+            const r = await window.pyCall("my_function", "hello");
+            document.getElementById("out").innerText = r;
+        }
+    <\/script>
+</body>
+</html>`;
+        updateStats();
         showScreen('editor');
     }
 
@@ -899,18 +1788,57 @@
         document.getElementById('back-to-repo-runner').onclick = () => showScreen('repo');
         document.getElementById('preview-run-btn').onclick = runPreview;
         document.getElementById('close-modal-btn').onclick = closeModal;
-        // test-server-btn oculto — URL llega automáticamente del Panel Fundador
+        
+        document.getElementById('download-code-btn').onclick = downloadCode;
+        document.getElementById('copy-code-btn').onclick = copyCode;
+        document.getElementById('upload-code-btn').onclick = uploadCode;
+        document.getElementById('clear-code-btn').onclick = clearCode;
+        document.getElementById('file-input').onchange = handleFileUpload;
+        
+        const editor = document.getElementById('app-editor');
+        editor.addEventListener('input', () => {
+            updateStats();
+            updateCursorPosition();
+        });
+        editor.addEventListener('click', updateCursorPosition);
+        editor.addEventListener('keyup', () => {
+            updateCursorPosition();
+            syncLineNumbersScroll();
+        });
+        editor.addEventListener('select', updateCursorPosition);
+        editor.addEventListener('scroll', syncLineNumbersScroll);
+        
+        editor.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                saveCurrentEdit();
+            }
+        });
+        
+        if (window.ResizeObserver) {
+            const ro = new ResizeObserver(() => updateLineNumbersWithErrors());
+            ro.observe(editor);
+        }
     }
 
-    // Inicialización
+    function syncLineNumbersScroll() {
+        const editor = document.getElementById('app-editor');
+        const lineNumContainer = document.getElementById('line-numbers');
+        if (editor && lineNumContainer) {
+            lineNumContainer.scrollTop = editor.scrollTop;
+        }
+    }
+
+    // Initialization
     loadProjects();
     renderRepository();
     bindEvents();
+    updateStats();
     
     if (window.parent !== window) {
         setTimeout(() => {
             sendToParent({ type: 'QCOL_STUDIO_OPENED', version: '2.0', status: 'ready' });
-            notify('Conectado con Panel Fundador (origen validado)', 1500);
+            notify('Connected to Founder Panel (origin validated)', 1500);
             sendToParent({ type: 'QCOL_REQUEST_COMPILER_URL' });
             const savedUrl = localStorage.getItem('qcol_colab_url');
             if (savedUrl && !receivedUrl) setServerUrl(savedUrl);
@@ -924,7 +1852,7 @@
         if (window.parent !== window && !receivedUrl && parentOrigin) sendToParent({ type: 'QCOL_REQUEST_COMPILER_URL' });
     }, 3000);
     
-    notify("Quantum App Studio · Protegido contra sobrelectura · Orígenes validados", 4000);
+    notify("⚛️ Quantum App Studio · Con detección de errores en tiempo real", 4000);
 </script>
 </body>
 </html>
