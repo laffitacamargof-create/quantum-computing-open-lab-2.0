@@ -6,7 +6,7 @@
     <title>Quantum App Studio · Connected to Founder</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
-        /* ===== ESTILOS (igual que antes) ===== */
+        /* ===== ESTILOS (mantener igual) ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
             --bg: #0a0e1a;
@@ -489,7 +489,7 @@
 
 <script>
     // ═══════════════════════════════════════════════════════════
-    // 🔧 FUNCIONES DE EXTRACCIÓN DE PYTHON (CORREGIDAS)
+    // 🔧 EXTRACCIÓN DE PYTHON - CORREGIDA
     // ═══════════════════════════════════════════════════════════
     
     function extractPythonFromHTML(htmlContent) {
@@ -498,17 +498,40 @@
         // Buscar el código Python entre los marcadores
         const match = htmlContent.match(/\/\/\s*⚡\s*PYTHON_START\s*([\s\S]*?)\s*\/\/\s*⚡\s*PYTHON_END/);
         if (match) {
-            // Limpiar los comentarios "//" de cada línea
+            // Limpiar el código Python
             let pythonCode = match[1]
                 .split('\n')
                 .map(line => {
                     // Remover el prefijo "// " si existe
                     let cleaned = line.replace(/^\/\/\s*/, '');
-                    // Si la línea está vacía o solo tiene espacios, mantenerla vacía
+                    // Remover espacios al inicio
+                    cleaned = cleaned.replace(/^\s+/, '');
                     return cleaned;
                 })
                 .join('\n')
                 .trim();
+            
+            // ✅ VALIDACIÓN: Verificar que no haya caracteres extraños
+            // Si la primera línea está vacía o tiene caracteres raros, limpiar
+            const lines = pythonCode.split('\n');
+            const cleanLines = lines.filter(line => line.trim() !== '');
+            
+            if (cleanLines.length === 0) return '';
+            
+            // Reconstruir con líneas limpias
+            pythonCode = cleanLines.join('\n');
+            
+            // ✅ Verificar sintaxis básica de Python
+            // Si hay "def " en el código, asegurar que no haya espacios raros
+            if (pythonCode.includes('def ')) {
+                // Asegurar que las definiciones de función tengan el formato correcto
+                pythonCode = pythonCode.replace(/def\s+(\w+)\s*\(/g, 'def $1(');
+            }
+            
+            console.log('🐍 Python extraído correctamente:');
+            console.log('   📝 Longitud:', pythonCode.length);
+            console.log('   📄 Líneas:', pythonCode.split('\n').length);
+            console.log('   📋 Preview:', pythonCode.substring(0, 100));
             
             return pythonCode;
         }
@@ -516,14 +539,19 @@
         // Fallback: buscar formato alternativo
         const altMatch = htmlContent.match(/\/\/\s*PYTHON\s*:\s*([\s\S]*?)\s*\/\/\s*END_PYTHON/);
         if (altMatch) {
-            return altMatch[1].trim();
+            let pythonCode = altMatch[1]
+                .split('\n')
+                .map(line => line.replace(/^\/\/\s*/, '').replace(/^\s+/, ''))
+                .join('\n')
+                .trim();
+            return pythonCode;
         }
         
         return '';
     }
 
     // ============================================================
-    // 🔥 buildCompleteApp() - CORREGIDA para enviar Python al servidor
+    // 🔥 buildCompleteApp() - CON VALIDACIÓN MEJORADA
     // ============================================================
     function buildCompleteApp(htmlContent, serverUrl) {
         // 1. Extraer el código Python del HTML
@@ -533,9 +561,9 @@
         console.log('   📡 Server URL:', serverUrl);
         console.log('   🐍 Python code length:', pythonCode.length);
         console.log('   🐍 Python preview:', pythonCode.substring(0, 100));
+        console.log('   🐍 Python lines:', pythonCode.split('\n').length);
         
         // 2. Construir el puente de comunicación con Python
-        //    Este puente se inyecta en el HTML y permite llamar a Python desde JS
         const bridge = `
 <script>
 (function() {
@@ -546,6 +574,7 @@
     console.log('🔮 Quantum App Bridge loaded');
     console.log('   📡 Server:', window.__serverUrl || '⚠️ Not configured');
     console.log('   🐍 Python code length:', (window.__pyCode || '').length);
+    console.log('   🐍 Python lines:', (window.__pyCode || '').split('\\n').length);
     console.log('   🐍 Python preview:', (window.__pyCode || '').substring(0, 80));
     
     // ====== FUNCIÓN PARA LLAMAR A PYTHON ======
@@ -553,7 +582,6 @@
         return new Promise((resolve, reject) => {
             const msgId = Date.now() + '-' + Math.random().toString(36).slice(2);
             
-            // Escuchar la respuesta
             const handler = (event) => {
                 if (event.data && event.data.type === 'pyResult' && event.data.id === msgId) {
                     window.removeEventListener('message', handler);
@@ -568,7 +596,6 @@
             };
             window.addEventListener('message', handler);
             
-            // Enviar la solicitud al padre (Puzzle/Studio)
             const payload = {
                 type: 'pyCall',
                 id: msgId,
@@ -580,7 +607,6 @@
             console.log('📤 pyCall:', funcName, args);
             window.parent.postMessage(payload, '*');
             
-            // Timeout por si el servidor no responde
             setTimeout(() => {
                 window.removeEventListener('message', handler);
                 reject(new Error('⏰ Timeout: Python server no respondió en 30 segundos'));
@@ -596,7 +622,6 @@
         // 3. Insertar el puente en el HTML
         let finalHtml = htmlContent || '<!DOCTYPE html><html><body><h2>⚛️ Quantum App</h2></body></html>';
         
-        // Insertar el puente en el lugar adecuado
         if (finalHtml.includes('</head>')) {
             finalHtml = finalHtml.replace('</head>', bridge + '</head>');
         } else if (finalHtml.includes('<body')) {
@@ -1226,7 +1251,7 @@ def add(a, b):
         return output;
     }
 
-    // Handler for calls from iframes (pyCall)
+    // Handler for calls from iframes (pyCall) - CORREGIDO con validación
     window.addEventListener('message', async (event) => {
         if (event.data.type === 'pyCall') {
             if (isEmbedded && parentOrigin && event.origin !== parentOrigin) return;
@@ -1235,21 +1260,50 @@ def add(a, b):
             const { id, func, args, serverUrl, pythonCode } = event.data;
             try {
                 if (!serverUrl) throw new Error("Missing server URL");
+                if (!pythonCode || pythonCode.trim() === '') {
+                    throw new Error("No Python code found in the app. Make sure to wrap your Python code with // ⚡ PYTHON_START and // ⚡ PYTHON_END");
+                }
                 
-                // ✅ Aquí se envía el código Python al servidor
-                console.log('🐍 Ejecutando Python en servidor:', func);
+                // ✅ VALIDAR el código Python antes de enviarlo
+                const cleanPythonCode = pythonCode.trim();
+                if (!cleanPythonCode.includes('def ' + func)) {
+                    console.warn('⚠️ La función "' + func + '" no se encontró en el código Python');
+                }
+                
+                console.log('🐍 Ejecutando Python en servidor:');
                 console.log('   📡 Server:', serverUrl);
-                console.log('   📝 Python code length:', pythonCode?.length || 0);
+                console.log('   📝 Función:', func);
+                console.log('   📝 Args:', args);
+                console.log('   📝 Python code length:', cleanPythonCode.length);
+                console.log('   📝 Python preview:', cleanPythonCode.substring(0, 150));
                 
-                const fullCode = `${pythonCode}\nimport json\n_result = ${func}(*${JSON.stringify(args)})\nprint(json.dumps(_result, ensure_ascii=False))`;
+                // ✅ Construir el código completo a ejecutar
+                const fullCode = `${cleanPythonCode}
+
+import json
+
+# Ejecutar la función solicitada
+_result = ${func}(*${JSON.stringify(args)})
+
+# Imprimir el resultado como JSON
+print(json.dumps(_result, ensure_ascii=False))`;
+                
+                console.log('   📝 Código completo a enviar al servidor:');
+                console.log('   ' + fullCode.split('\n').map(l => '   ' + l).join('\n'));
+                
                 const output = await executePythonRemote(fullCode, serverUrl);
                 let result = output.trim();
+                
+                // Intentar parsear JSON
                 if ((result.startsWith('"') && result.endsWith('"')) || 
                     (result.startsWith('{') && result.endsWith('}')) ||
                     (result.startsWith('[') && result.endsWith(']'))) {
                     try { result = JSON.parse(result); } catch(e) {}
                 }
+                
+                console.log('✅ Resultado:', result);
                 event.source.postMessage({ type: 'pyResult', id: id, result: result }, event.origin);
+                
             } catch(err) {
                 console.error('❌ Python error:', err.message);
                 event.source.postMessage({ type: 'pyResult', id: id, error: err.message }, event.origin);
