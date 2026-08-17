@@ -6,6 +6,7 @@
     <title>Quantum App Studio · Connected to Founder</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
+        /* ===== ESTILOS (igual que antes) ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
             --bg: #0a0e1a;
@@ -25,6 +26,7 @@
             --tx2: #8aa0c4;
             --mu: #3d5a8a;
             --line-num-width: 50px;
+            --active-line-bg: rgba(0, 136, 255, 0.08);
         }
         body {
             background: var(--bg);
@@ -143,7 +145,6 @@
         }
         .btn-pending:hover { background: var(--yw); color: #0a0e1a; border-color: var(--yw); }
         
-        /* ========== EDITOR CON NÚMEROS DE LÍNEA Y ERRORES ========== */
         .editor-container {
             display: flex;
             flex: 1;
@@ -181,12 +182,7 @@
             background: rgba(255,215,0,0.15);
             color: var(--yw);
         }
-        .pane-header .badge-error {
-            background: rgba(255,68,102,0.2);
-            color: var(--rd);
-        }
         
-        /* Editor con números de línea y errores */
         .editor-wrapper {
             display: flex;
             flex: 1;
@@ -210,33 +206,23 @@
             white-space: pre;
             padding-top: 0.8rem;
             position: relative;
-            z-index: 1;
+            z-index: 2;
         }
         .line-numbers .ln {
             display: block;
             color: var(--mu);
             opacity: 0.6;
             transition: color 0.15s;
-            position: relative;
         }
         .line-numbers .ln.active {
-            color: var(--tx2);
+            color: var(--bl2);
             opacity: 1;
+            font-weight: 600;
         }
-        .line-numbers .ln.error {
-            color: var(--rd) !important;
-            opacity: 1 !important;
-            font-weight: bold;
-        }
-        .line-numbers .ln.error::after {
-            content: ' ✗';
-            color: var(--rd);
-            font-weight: bold;
-        }
-        /* Línea de error en el editor */
-        .code-area .error-line {
-            background: rgba(255,68,102,0.12) !important;
-            border-left: 3px solid var(--rd);
+        .line-numbers .ln.active-line {
+            color: var(--gr);
+            opacity: 1;
+            font-weight: 700;
         }
         .code-area {
             flex: 1;
@@ -253,14 +239,9 @@
             line-height: 1.6;
             overflow: auto;
             position: relative;
-            z-index: 2;
+            z-index: 1;
         }
         .code-area:focus { background: #080c18; }
-        .code-area::selection {
-            background: rgba(0,136,255,0.3);
-        }
-        /* ============================================== */
-
         .top-editor-bar {
             padding: 0.5rem;
             display: flex;
@@ -275,16 +256,6 @@
             align-items: center;
             margin-left: auto;
             flex-wrap: wrap;
-        }
-        .server-input {
-            background: var(--bg3);
-            border: 1px solid var(--bd2);
-            border-radius: 6px;
-            padding: 0.3rem 0.6rem;
-            font-family: monospace;
-            font-size: 0.6rem;
-            color: var(--tx);
-            width: 220px;
         }
         .modal {
             position: fixed;
@@ -417,38 +388,12 @@
             display: flex;
             gap: 1rem;
         }
-        .status-bar .error-count {
-            color: var(--rd);
-            font-weight: bold;
-        }
-        .status-bar .error-count.ok {
-            color: var(--gr);
-        }
         .line-numbers::-webkit-scrollbar { width: 0; height: 0; }
         .line-numbers { scrollbar-width: none; }
-        
-        /* Tooltip de error */
-        .error-tooltip {
-            position: fixed;
-            background: rgba(40,10,20,0.95);
-            border: 1px solid var(--rd);
-            border-radius: 6px;
-            padding: 0.4rem 0.8rem;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.6rem;
-            color: #ffccdd;
-            max-width: 400px;
-            z-index: 99999;
-            pointer-events: none;
-            display: none;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 20px rgba(255,68,102,0.2);
-        }
     </style>
 </head>
 <body>
 <div class="notif" id="notif"></div>
-<div class="error-tooltip" id="errorTooltip"></div>
 
 <!-- REPOSITORY -->
 <div id="repo-screen" class="screen">
@@ -459,7 +404,7 @@
     <div class="projects-grid" id="projects-grid"></div>
 </div>
 
-<!-- EDITOR - UNIFICADO CON NÚMEROS DE LÍNEA Y ERRORES -->
+<!-- EDITOR -->
 <div id="editor-screen" class="screen hidden">
     <div class="top-editor-bar">
         <input type="text" id="project-name-input" placeholder="Project name" style="background:var(--bg3); border:1px solid var(--bd); border-radius:6px; padding:0.4rem; color:white; width:200px;">
@@ -494,7 +439,7 @@
                     <span id="line-count">📄 0 lines</span>
                     <span class="badge" id="py-lines-badge">🐍 0 lines</span>
                     <span class="badge badge-html" id="html-lines-badge">🌐 0 lines</span>
-                    <span class="badge badge-error" id="error-badge">⚠️ 0 errors</span>
+                    <span id="active-line-display" style="color:var(--bl2);">📍 Ln 1</span>
                 </div>
             </div>
             <div class="editor-wrapper">
@@ -508,7 +453,7 @@
         <span>💡 Python se embebe con <code>// ⚡ PYTHON_START</code> y <code>// ⚡ PYTHON_END</code></span>
         <span class="py-extract" id="py-extract-info">🐍 Extraído: <span id="py-extract-count">0</span> líneas</span>
         <span>🌐 Usa <code>window.pyCall("func", args...)</code> para ejecutar Python</span>
-        <span>🔴 Errores de sintaxis marcados en rojo</span>
+        <span>🔢 <code>Ctrl+S</code> guardar · Línea activa resaltada</span>
     </div>
     
     <div class="status-bar">
@@ -517,7 +462,6 @@
             <span id="encoding-status">UTF-8</span>
             <span id="file-size-status">0 KB</span>
             <span id="server-status-text">🌐 Server: ---</span>
-            <span id="error-count-status" class="error-count ok">✅ 0 errors</span>
         </span>
     </div>
 </div>
@@ -545,93 +489,31 @@
 
 <script>
     // ═══════════════════════════════════════════════════════════
-    // 🔄 MIGRACIÓN: UNIFICAR HTML + PYTHON EN UN SOLO ARCHIVO
+    // 🔧 FUNCIONES DE EXTRACCIÓN DE PYTHON (CORREGIDAS)
     // ═══════════════════════════════════════════════════════════
-    
-    // ---------- REPOSITORY + EDITOR + REMOTE BACKEND ----------
-    let projects = [];
-    let currentEditId = null;
-    let remoteSessionStatus = false;
-    let isEmbedded = false;
-    let parentOrigin = null;
-    let receivedUrl = false;
-    let currentServerUrl = '';
-    let errorLines = new Set();
-
-    // ═══════════════════════════════════════════════════════════
-    // 🛡️ PROTECTION: Force English AI + Clean editor on project switch
-    // ═══════════════════════════════════════════════════════════
-    (function initProtections() {
-        const storedAI = JSON.parse(localStorage.getItem('qcol_ai') || '{}');
-        if (!storedAI.lang || storedAI.lang === 'es') {
-            storedAI.lang = 'en';
-            localStorage.setItem('qcol_ai', JSON.stringify(storedAI));
-        }
-
-        const stored = localStorage.getItem('quantum_apps_repo_v3');
-        if (stored) {
-            try {
-                const parsed = JSON.parse(stored);
-                const migrated = parsed.map(proj => {
-                    if (proj.content) return proj;
-                    
-                    const pythonCode = proj.pythonCode || '';
-                    const htmlCode = proj.htmlCode || '';
-                    let content = htmlCode;
-                    
-                    if (pythonCode && pythonCode.trim()) {
-                        if (!content.includes('PYTHON_START')) {
-                            let pythonEmbed = '        // ⚡ PYTHON_START\n';
-                            pythonCode.split('\n').forEach(line => {
-                                pythonEmbed += '        // ' + line + '\n';
-                            });
-                            pythonEmbed += '        // ⚡ PYTHON_END\n';
-                            
-                            if (content.includes('<script>')) {
-                                content = content.replace('<script>', '<script>\n' + pythonEmbed);
-                            } else if (content.includes('</body>')) {
-                                content = content.replace('</body>', '<script>\n' + pythonEmbed + '\n<\/script>\n</body>');
-                            } else {
-                                content = content + '\n<script>\n' + pythonEmbed + '\n<\/script>\n';
-                            }
-                        }
-                    }
-                    
-                    return {
-                        id: proj.id || generateId(),
-                        name: proj.name || 'Untitled',
-                        content: content,
-                        pythonCode: pythonCode,
-                        htmlCode: htmlCode,
-                        serverUrl: proj.serverUrl || '',
-                        createdAt: proj.createdAt || Date.now()
-                    };
-                });
-                
-                localStorage.setItem('quantum_apps_repo_v3', JSON.stringify(migrated));
-                localStorage.setItem('quantum_apps_repo_v2_backup', stored);
-            } catch(e) { console.warn('Migration error:', e); }
-        }
-    })();
-    // ═══════════════════════════════════════════════════════════
-
-    // ============================================================
-    // 🔧 FUNCIONES DE EXTRACCIÓN DE PYTHON
-    // ============================================================
     
     function extractPythonFromHTML(htmlContent) {
         if (!htmlContent || typeof htmlContent !== 'string') return '';
         
+        // Buscar el código Python entre los marcadores
         const match = htmlContent.match(/\/\/\s*⚡\s*PYTHON_START\s*([\s\S]*?)\s*\/\/\s*⚡\s*PYTHON_END/);
         if (match) {
+            // Limpiar los comentarios "//" de cada línea
             let pythonCode = match[1]
                 .split('\n')
-                .map(line => line.replace(/^\/\/\s*/, ''))
+                .map(line => {
+                    // Remover el prefijo "// " si existe
+                    let cleaned = line.replace(/^\/\/\s*/, '');
+                    // Si la línea está vacía o solo tiene espacios, mantenerla vacía
+                    return cleaned;
+                })
                 .join('\n')
                 .trim();
+            
             return pythonCode;
         }
         
+        // Fallback: buscar formato alternativo
         const altMatch = htmlContent.match(/\/\/\s*PYTHON\s*:\s*([\s\S]*?)\s*\/\/\s*END_PYTHON/);
         if (altMatch) {
             return altMatch[1].trim();
@@ -640,282 +522,81 @@
         return '';
     }
 
-    function getPythonLineCount(htmlContent) {
-        const pyCode = extractPythonFromHTML(htmlContent);
-        if (!pyCode) return 0;
-        return pyCode.split('\n').filter(line => line.trim()).length;
-    }
-
-    function getHTMLLineCount(htmlContent) {
-        if (!htmlContent) return 0;
-        let clean = htmlContent.replace(/\/\/\s*⚡\s*PYTHON_START[\s\S]*?\/\/\s*⚡\s*PYTHON_END/g, '');
-        return clean.split('\n').length;
-    }
-
-    function getTotalLineCount(htmlContent) {
-        if (!htmlContent) return 0;
-        return htmlContent.split('\n').length;
-    }
-
     // ============================================================
-    // 🔴 DETECCIÓN DE ERRORES DE SINTAXIS
+    // 🔥 buildCompleteApp() - CORREGIDA para enviar Python al servidor
     // ============================================================
-    
-    function detectSyntaxErrors(code) {
-        const errors = new Set();
-        const lines = code.split('\n');
-        
-        // Detectar errores comunes en HTML/JS/Python embebido
-        
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            const lineNum = i + 1;
-            let hasError = false;
-            
-            // --- ERRORES DE HTML ---
-            
-            // 1. Etiqueta sin cerrar (solo para etiquetas comunes)
-            const unclosedTags = line.match(/<([a-zA-Z][a-zA-Z0-9]*)(?:\s[^>]*)?>/g);
-            if (unclosedTags) {
-                for (const tag of unclosedTags) {
-                    const tagName = tag.match(/<([a-zA-Z][a-zA-Z0-9]*)/)?.[1];
-                    if (tagName && !['br', 'hr', 'img', 'input', 'meta', 'link', 'area', 'base', 'col', 'command', 'embed', 'keygen', 'param', 'source', 'track', 'wbr'].includes(tagName.toLowerCase())) {
-                        // Buscar el cierre en líneas siguientes (simplificado)
-                        const closingTag = `</${tagName}>`;
-                        let found = false;
-                        for (let j = i + 1; j < Math.min(i + 20, lines.length); j++) {
-                            if (lines[j].includes(closingTag)) {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (!found && !line.includes(closingTag)) {
-                            hasError = true;
-                        }
-                    }
-                }
-            }
-            
-            // 2. Comillas sin cerrar en HTML
-            const quoteCount = (line.match(/"/g) || []).length;
-            if (quoteCount % 2 !== 0) {
-                hasError = true;
-            }
-            
-            // 3. Paréntesis sin cerrar en atributos HTML
-            const parenOpen = (line.match(/\(/g) || []).length;
-            const parenClose = (line.match(/\)/g) || []).length;
-            if (parenOpen !== parenClose && (parenOpen > 0 || parenClose > 0)) {
-                hasError = true;
-            }
-            
-            // --- ERRORES DE JAVASCRIPT ---
-            
-            // 4. JavaScript: llaves sin cerrar (simplificado)
-            if (!line.trim().startsWith('//') && !line.trim().startsWith('/*') && !line.trim().startsWith('*')) {
-                const braceOpen = (line.match(/{/g) || []).length;
-                const braceClose = (line.match(/}/g) || []).length;
-                // Solo marcar si hay desbalance y no es parte de Python
-                if (braceOpen !== braceClose && (braceOpen > 0 || braceClose > 0)) {
-                    // Verificar que no sea parte de un objeto Python
-                    if (!line.includes('def ') && !line.includes('return ') && !line.includes('class ')) {
-                        hasError = true;
-                    }
-                }
-            }
-            
-            // 5. JavaScript: punto y coma faltante en asignaciones (heurístico)
-            if (line.trim() && !line.trim().endsWith(';') && !line.trim().endsWith('{') && 
-                !line.trim().endsWith('}') && !line.trim().endsWith('(') && !line.trim().endsWith(')') &&
-                !line.trim().endsWith('//') && !line.trim().startsWith('//') && !line.trim().startsWith('/*') &&
-                !line.trim().startsWith('*') && !line.trim().includes('function') && 
-                !line.trim().includes('if ') && !line.trim().includes('for ') && !line.trim().includes('while ') &&
-                !line.trim().includes('switch ') && !line.trim().includes('try ') && !line.trim().includes('catch ') &&
-                !line.trim().includes('with ') && line.trim().includes('=') && !line.trim().includes('=>')) {
-                // No marcar si es una declaración de variable sin asignación
-                if (!line.trim().match(/^(let|var|const)\s+[a-zA-Z_][a-zA-Z0-9_]*\s*;?$/)) {
-                    // No marcar si es Python
-                    if (!line.includes('def ') && !line.includes('return ') && !line.includes('class ')) {
-                        // hasError = true; // Comentado para no ser demasiado estricto
-                    }
-                }
-            }
-            
-            // 6. JavaScript: palabras clave mal escritas (común)
-            const jsKeywords = ['function', 'return', 'var', 'let', 'const', 'if', 'else', 'for', 'while', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally', 'throw', 'new', 'this', 'typeof', 'instanceof', 'void', 'delete', 'class', 'extends', 'super', 'import', 'export', 'default', 'from', 'async', 'await'];
-            for (const kw of jsKeywords) {
-                if (line.includes(kw + ' ') && !line.includes('"') && !line.includes("'") && !line.includes('//')) {
-                    // Verificar que no sea parte de Python
-                    if (!line.includes('def ') && !line.includes('return ') && !line.includes('class ')) {
-                        // hasError = true; // Muy estricto, comentado
-                    }
-                }
-            }
-            
-            // --- ERRORES DE PYTHON (dentro del bloque embebido) ---
-            
-            // Detectar si estamos dentro de un bloque Python
-            const isPythonBlock = line.includes('PYTHON_START') || 
-                                  (line.includes('//') && line.includes('def ') && !line.includes('function'));
-            
-            if (isPythonBlock || line.includes('def ') || line.includes('class ') || line.includes('import ')) {
-                // 7. Python: indentación inconsistente (detectar tabs vs espacios)
-                if (line.trim().startsWith('\t') && line.length > 0 && !line.trim().startsWith('#')) {
-                    // Marcar tabs en Python como advertencia
-                }
-                
-                // 8. Python: dos puntos faltantes en def/class/if/for/while
-                if ((line.includes('def ') || line.includes('class ') || 
-                     line.includes('if ') || line.includes('for ') || line.includes('while ')) &&
-                    !line.trim().endsWith(':') && !line.includes('//') && !line.includes('#')) {
-                    hasError = true;
-                }
-                
-                // 9. Python: paréntesis sin cerrar en llamadas a funciones
-                if (line.includes('(') && !line.includes(')') && !line.includes('//') && !line.includes('#')) {
-                    // Buscar cierre en líneas siguientes
-                    let found = false;
-                    for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
-                        if (lines[j].includes(')')) {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        hasError = true;
-                    }
-                }
-            }
-            
-            // --- ERRORES ESPECÍFICOS DE PYTHON EMBEBIDO ---
-            
-            // 10. Verificar que el código Python no tenga caracteres inválidos
-            if (line.includes('PYTHON_START') || line.includes('PYTHON_END')) {
-                // No marcar estas líneas
-                continue;
-            }
-            
-            if (line.includes('//') && (line.includes('def ') || line.includes('return '))) {
-                // Extraer el código Python real
-                const pyLine = line.replace(/\/\/\s*/, '');
-                // Verificar que sea Python válido (simplificado)
-                if (pyLine.includes('def ') && !pyLine.includes(':')) {
-                    hasError = true;
-                }
-            }
-            
-            if (hasError) {
-                errors.add(lineNum);
-            }
-        }
-        
-        return errors;
-    }
-
-    // ============================================================
-    // 📊 ACTUALIZACIÓN DE ESTADÍSTICAS CON ERRORES
-    // ============================================================
-    
-    function updateErrorDetection() {
-        const content = document.getElementById('app-editor').value;
-        errorLines = detectSyntaxErrors(content);
-        
-        // Actualizar badge de errores
-        const errorBadge = document.getElementById('error-badge');
-        const errorStatus = document.getElementById('error-count-status');
-        const errorCount = errorLines.size;
-        
-        if (errorBadge) {
-            errorBadge.textContent = `⚠️ ${errorCount} errors`;
-            errorBadge.style.background = errorCount > 0 ? 'rgba(255,68,102,0.25)' : 'rgba(0,255,136,0.15)';
-            errorBadge.style.color = errorCount > 0 ? 'var(--rd)' : 'var(--gr)';
-        }
-        
-        if (errorStatus) {
-            if (errorCount > 0) {
-                errorStatus.textContent = `🔴 ${errorCount} errors`;
-                errorStatus.className = 'error-count';
-            } else {
-                errorStatus.textContent = '✅ 0 errors';
-                errorStatus.className = 'error-count ok';
-            }
-        }
-        
-        // Actualizar números de línea con errores
-        updateLineNumbersWithErrors();
-    }
-
-    function updateLineNumbersWithErrors() {
-        const editor = document.getElementById('app-editor');
-        const lineNumContainer = document.getElementById('line-numbers');
-        if (!editor || !lineNumContainer) return;
-        
-        const lines = editor.value.split('\n');
-        const totalLines = lines.length;
-        const scrollTop = editor.scrollTop;
-        const lineHeight = 1.6 * 11.2;
-        const visibleHeight = editor.clientHeight;
-        const startLine = Math.floor(scrollTop / lineHeight);
-        const endLine = Math.min(totalLines, startLine + Math.ceil(visibleHeight / lineHeight) + 2);
-        
-        let html = '';
-        for (let i = 1; i <= totalLines; i++) {
-            const isActive = (i >= startLine && i <= endLine);
-            const hasError = errorLines.has(i);
-            const className = `ln${isActive ? ' active' : ''}${hasError ? ' error' : ''}`;
-            html += `<span class="${className}">${i}</span>`;
-        }
-        lineNumContainer.innerHTML = html;
-        lineNumContainer.scrollTop = scrollTop;
-        
-        // Marcar líneas con error en el editor (mediante overlay no es posible directamente)
-        // En su lugar, usamos el color de fondo en los números de línea
-    }
-
-    // ============================================================
-    // 🔧 FUNCIONES DE CONSTRUCCIÓN
-    // ============================================================
-
     function buildCompleteApp(htmlContent, serverUrl) {
+        // 1. Extraer el código Python del HTML
         const pythonCode = extractPythonFromHTML(htmlContent);
         
+        console.log('🔮 buildCompleteApp:');
+        console.log('   📡 Server URL:', serverUrl);
+        console.log('   🐍 Python code length:', pythonCode.length);
+        console.log('   🐍 Python preview:', pythonCode.substring(0, 100));
+        
+        // 2. Construir el puente de comunicación con Python
+        //    Este puente se inyecta en el HTML y permite llamar a Python desde JS
         const bridge = `
 <script>
 (function() {
+    // ====== CONFIGURACIÓN DEL SERVIDOR ======
     window.__serverUrl = ${JSON.stringify(serverUrl || '')};
     window.__pyCode = ${JSON.stringify(pythonCode || '')};
     
+    console.log('🔮 Quantum App Bridge loaded');
+    console.log('   📡 Server:', window.__serverUrl || '⚠️ Not configured');
+    console.log('   🐍 Python code length:', (window.__pyCode || '').length);
+    console.log('   🐍 Python preview:', (window.__pyCode || '').substring(0, 80));
+    
+    // ====== FUNCIÓN PARA LLAMAR A PYTHON ======
     window.pyCall = async function(funcName, ...args) {
         return new Promise((resolve, reject) => {
             const msgId = Date.now() + '-' + Math.random().toString(36).slice(2);
+            
+            // Escuchar la respuesta
             const handler = (event) => {
                 if (event.data && event.data.type === 'pyResult' && event.data.id === msgId) {
                     window.removeEventListener('message', handler);
-                    if (event.data.error) reject(new Error(event.data.error));
-                    else resolve(event.data.result);
+                    if (event.data.error) {
+                        console.error('❌ Python error:', event.data.error);
+                        reject(new Error(event.data.error));
+                    } else {
+                        console.log('✅ Python result:', event.data.result);
+                        resolve(event.data.result);
+                    }
                 }
             };
             window.addEventListener('message', handler);
-            window.parent.postMessage({
+            
+            // Enviar la solicitud al padre (Puzzle/Studio)
+            const payload = {
                 type: 'pyCall',
                 id: msgId,
                 func: funcName,
                 args: args,
                 serverUrl: window.__serverUrl,
                 pythonCode: window.__pyCode
-            }, '*');
+            };
+            console.log('📤 pyCall:', funcName, args);
+            window.parent.postMessage(payload, '*');
+            
+            // Timeout por si el servidor no responde
+            setTimeout(() => {
+                window.removeEventListener('message', handler);
+                reject(new Error('⏰ Timeout: Python server no respondió en 30 segundos'));
+            }, 30000);
         });
     };
     
-    console.log('🔮 Quantum App ready');
-    console.log('   📡 Server:', window.__serverUrl || '⚠️ Not configured');
-    console.log('   🐍 Python functions:', (window.__pyCode || '').split('\\n').filter(l => l.includes('def ')).length);
+    console.log('✅ Quantum App Bridge ready');
 })();
 <\/script>
         `;
         
+        // 3. Insertar el puente en el HTML
         let finalHtml = htmlContent || '<!DOCTYPE html><html><body><h2>⚛️ Quantum App</h2></body></html>';
         
+        // Insertar el puente en el lugar adecuado
         if (finalHtml.includes('</head>')) {
             finalHtml = finalHtml.replace('</head>', bridge + '</head>');
         } else if (finalHtml.includes('<body')) {
@@ -930,8 +611,17 @@
     }
 
     // ============================================================
-    // 📦 FUNCIONES DE PROYECTO
+    // 📦 RESTO DE FUNCIONES (igual que antes)
     // ============================================================
+    
+    let projects = [];
+    let currentEditId = null;
+    let remoteSessionStatus = false;
+    let isEmbedded = false;
+    let parentOrigin = null;
+    let receivedUrl = false;
+    let currentServerUrl = '';
+    let activeLineNumber = 1;
 
     function notify(msg, dur=3000) {
         const n = document.getElementById('notif');
@@ -970,6 +660,71 @@
         }
     }
 
+    // ============================================================
+    // 🔢 NÚMEROS DE LÍNEA
+    // ============================================================
+    
+    function getActiveLine() {
+        const editor = document.getElementById('app-editor');
+        if (!editor) return 1;
+        const pos = editor.selectionStart;
+        const text = editor.value.substring(0, pos);
+        return text.split('\n').length;
+    }
+
+    function updateLineNumbers() {
+        const editor = document.getElementById('app-editor');
+        const lineNumContainer = document.getElementById('line-numbers');
+        if (!editor || !lineNumContainer) return;
+        
+        const lines = editor.value.split('\n');
+        const totalLines = lines.length;
+        const scrollTop = editor.scrollTop;
+        const activeLine = getActiveLine();
+        activeLineNumber = activeLine;
+        
+        const lineHeight = 1.6 * 11.2;
+        const visibleHeight = editor.clientHeight;
+        const startLine = Math.floor(scrollTop / lineHeight);
+        const endLine = Math.min(totalLines, startLine + Math.ceil(visibleHeight / lineHeight) + 2);
+        
+        let html = '';
+        for (let i = 1; i <= totalLines; i++) {
+            let cls = 'ln';
+            if (i >= startLine && i <= endLine) cls += ' active';
+            if (i === activeLine) cls += ' active-line';
+            html += `<span class="${cls}">${i}</span>`;
+        }
+        lineNumContainer.innerHTML = html;
+        lineNumContainer.scrollTop = scrollTop;
+        document.getElementById('active-line-display').textContent = `📍 Ln ${activeLine}`;
+    }
+
+    function syncLineNumbersScroll() {
+        const editor = document.getElementById('app-editor');
+        const lineNumContainer = document.getElementById('line-numbers');
+        if (editor && lineNumContainer) {
+            lineNumContainer.scrollTop = editor.scrollTop;
+        }
+    }
+
+    function getPythonLineCount(htmlContent) {
+        const pyCode = extractPythonFromHTML(htmlContent);
+        if (!pyCode) return 0;
+        return pyCode.split('\n').filter(line => line.trim()).length;
+    }
+
+    function getHTMLLineCount(htmlContent) {
+        if (!htmlContent) return 0;
+        let clean = htmlContent.replace(/\/\/\s*⚡\s*PYTHON_START[\s\S]*?\/\/\s*⚡\s*PYTHON_END/g, '');
+        return clean.split('\n').length;
+    }
+
+    function getTotalLineCount(htmlContent) {
+        if (!htmlContent) return 0;
+        return htmlContent.split('\n').length;
+    }
+
     function updateStats() {
         const content = document.getElementById('app-editor').value;
         const totalLines = getTotalLineCount(content);
@@ -983,9 +738,7 @@
         
         const size = new Blob([content]).size;
         document.getElementById('file-size-status').textContent = size > 1024 ? (size/1024).toFixed(1) + ' KB' : size + ' B';
-        
-        // Detectar errores
-        updateErrorDetection();
+        updateLineNumbers();
     }
 
     function updateCursorPosition() {
@@ -996,9 +749,10 @@
         const line = lines.length;
         const col = lines[lines.length - 1].length + 1;
         document.getElementById('cursor-status').textContent = `Ln ${line}, Col ${col}`;
+        updateLineNumbers();
     }
 
-    // ================== OVER-READING PROTECTION ==================
+    // ================== MENSAJES ==================
     window.addEventListener('message', async (event) => {
         const data = event.data;
         if (!data || typeof data !== 'object') return;
@@ -1161,6 +915,10 @@
         }
     });
 
+    // ============================================================
+    // 📦 FUNCIONES DE PROYECTO
+    // ============================================================
+
     function notifyParentAboutChange(action, appId, appData = null) {
         if (!isEmbedded || !parentOrigin) return;
         sendToParent({ type: action === 'save' ? 'QCOL_APP_SAVED' : 'QCOL_APP_DELETED', appId, appData });
@@ -1171,7 +929,6 @@
         if (previousBackup) {
             localStorage.setItem('quantum_apps_repo_v3_backup', previousBackup);
         }
-
         localStorage.setItem('quantum_apps_repo_v3', JSON.stringify(projects));
         if (isEmbedded && currentEditId && parentOrigin) {
             const proj = projects.find(p => p.id === currentEditId);
@@ -1292,7 +1049,7 @@ def add(a, b):
     }
 
     // ============================================================
-    // 🔄 FUNCIÓN SEND TO PENDING CON SINCRONIZACIÓN A LA NUBE
+    // 🔄 SEND TO PENDING
     // ============================================================
     function sendToPending(id) {
         const proj = projects.find(p => p.id === id);
@@ -1478,6 +1235,12 @@ def add(a, b):
             const { id, func, args, serverUrl, pythonCode } = event.data;
             try {
                 if (!serverUrl) throw new Error("Missing server URL");
+                
+                // ✅ Aquí se envía el código Python al servidor
+                console.log('🐍 Ejecutando Python en servidor:', func);
+                console.log('   📡 Server:', serverUrl);
+                console.log('   📝 Python code length:', pythonCode?.length || 0);
+                
                 const fullCode = `${pythonCode}\nimport json\n_result = ${func}(*${JSON.stringify(args)})\nprint(json.dumps(_result, ensure_ascii=False))`;
                 const output = await executePythonRemote(fullCode, serverUrl);
                 let result = output.trim();
@@ -1488,6 +1251,7 @@ def add(a, b):
                 }
                 event.source.postMessage({ type: 'pyResult', id: id, result: result }, event.origin);
             } catch(err) {
+                console.error('❌ Python error:', err.message);
                 event.source.postMessage({ type: 'pyResult', id: id, error: err.message }, event.origin);
             }
         }
@@ -1552,14 +1316,14 @@ def add(a, b):
         } else if (screenId === 'editor') {
             document.getElementById('editor-screen').classList.remove('hidden');
             updateStats();
-            setTimeout(() => updateLineNumbersWithErrors(), 50);
+            setTimeout(updateLineNumbers, 50);
         } else if (screenId === 'runner') {
             document.getElementById('runner-screen').classList.remove('hidden');
         }
     }
 
     // ============================================================
-    // 🔄 NUEVAS FUNCIONES: DESCARGAR, COPIAR, SUBIR, BORRAR
+    // 🔄 FUNCIONES: DESCARGAR, COPIAR, SUBIR, BORRAR
     // ============================================================
     
     function downloadCode() {
@@ -1800,10 +1564,14 @@ def add(a, b):
             updateStats();
             updateCursorPosition();
         });
-        editor.addEventListener('click', updateCursorPosition);
+        editor.addEventListener('click', () => {
+            updateCursorPosition();
+            updateLineNumbers();
+        });
         editor.addEventListener('keyup', () => {
             updateCursorPosition();
             syncLineNumbersScroll();
+            updateLineNumbers();
         });
         editor.addEventListener('select', updateCursorPosition);
         editor.addEventListener('scroll', syncLineNumbersScroll);
@@ -1816,16 +1584,8 @@ def add(a, b):
         });
         
         if (window.ResizeObserver) {
-            const ro = new ResizeObserver(() => updateLineNumbersWithErrors());
+            const ro = new ResizeObserver(() => updateLineNumbers());
             ro.observe(editor);
-        }
-    }
-
-    function syncLineNumbersScroll() {
-        const editor = document.getElementById('app-editor');
-        const lineNumContainer = document.getElementById('line-numbers');
-        if (editor && lineNumContainer) {
-            lineNumContainer.scrollTop = editor.scrollTop;
         }
     }
 
@@ -1852,7 +1612,7 @@ def add(a, b):
         if (window.parent !== window && !receivedUrl && parentOrigin) sendToParent({ type: 'QCOL_REQUEST_COMPILER_URL' });
     }, 3000);
     
-    notify("⚛️ Quantum App Studio · Con detección de errores en tiempo real", 4000);
+    notify("⚛️ Quantum App Studio · Con números de línea y resaltado de línea activa", 4000);
 </script>
 </body>
 </html>
