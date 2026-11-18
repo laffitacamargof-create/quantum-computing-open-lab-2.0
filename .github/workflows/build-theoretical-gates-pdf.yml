@@ -1,0 +1,80 @@
+name: Build QuOLab theoretical gates PDF
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/theoretical-gates-investigator-universal-u-specification.md"
+      - ".github/workflows/build-theoretical-gates-pdf.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build-pdf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install reportlab
+      - name: Generate PDF
+        run: |
+          python - <<'PY'
+          from reportlab.lib.pagesizes import A4
+          from reportlab.lib import colors
+          from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+          from reportlab.lib.units import mm
+          from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Preformatted, Table, TableStyle
+          from xml.sax.saxutils import escape
+          import re
+          src = "docs/theoretical-gates-investigator-universal-u-specification.md"
+          out = "docs/QuOLab_Nexus_Theoretical_Gates_Investigator_Universal_U.pdf"
+          text = open(src, encoding="utf-8").read().splitlines()
+          s = getSampleStyleSheet()
+          s.add(ParagraphStyle(name="Cover", parent=s["Title"], fontSize=22, leading=27, textColor=colors.HexColor("#101B33"), alignment=1, spaceAfter=12))
+          s.add(ParagraphStyle(name="H1x", parent=s["Heading1"], fontSize=16, leading=20, textColor=colors.HexColor("#101B33"), spaceBefore=12, spaceAfter=7))
+          s.add(ParagraphStyle(name="H2x", parent=s["Heading2"], fontSize=12, leading=15, textColor=colors.HexColor("#2456A6"), spaceBefore=8, spaceAfter=4))
+          s.add(ParagraphStyle(name="Bodyx", parent=s["BodyText"], fontSize=9, leading=13, spaceAfter=5))
+          s.add(ParagraphStyle(name="Codex", parent=s["Code"], fontSize=8, leading=10, backColor=colors.HexColor("#EEF3FA"), borderPadding=6, spaceAfter=7))
+          story=[]; in_code=False; code=[]
+          def inline(t):
+              t=escape(t)
+              t=re.sub(r'\\*\\*(.+?)\\*\\*', r'<b>\\1</b>', t)
+              t=re.sub(r'\\*(.+?)\\*', r'<i>\\1</i>', t)
+              t=re.sub(r'`(.+?)`', r'<font name="Courier">\\1</font>', t)
+              return t
+          for line in text:
+              if line.startswith('```'):
+                  if in_code:
+                      story.append(Preformatted("\\n".join(code), s["Codex"])); code=[]; in_code=False
+                  else: in_code=True
+                  continue
+              if in_code: code.append(line); continue
+              if not line.strip(): story.append(Spacer(1,3)); continue
+              if line.startswith('# '):
+                  story.append(Paragraph(inline(line[2:]), s["Cover"])); continue
+              if line.startswith('## '):
+                  story.append(Paragraph(inline(line[3:]), s["H1x"])); continue
+              if line.startswith('### '):
+                  story.append(Paragraph(inline(line[4:]), s["H2x"])); continue
+              if line.startswith('|'):
+                  continue
+              if line.startswith('- '):
+                  story.append(Paragraph('• '+inline(line[2:]), s["Bodyx"])); continue
+              if re.match(r'^\\d+\\. ', line):
+                  story.append(Paragraph(inline(line), s["Bodyx"])); continue
+              if line.startswith('**') and line.endswith('**'):
+                  story.append(Paragraph('<b>'+inline(line[2:-2])+'</b>', s["Bodyx"])); continue
+              story.append(Paragraph(inline(line), s["Bodyx"]))
+          doc=SimpleDocTemplate(out,pagesize=A4,rightMargin=18*mm,leftMargin=18*mm,topMargin=18*mm,bottomMargin=18*mm,title="QuOLab Nexus - Functional Specification")
+          doc.build(story)
+          PY
+      - name: Commit generated PDF
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/QuOLab_Nexus_Theoretical_Gates_Investigator_Universal_U.pdf
+          git commit -m "Build QuOLab theoretical gates specification PDF" || exit 0
+          git push
