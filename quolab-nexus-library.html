@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
+<script defer src="quolab-nexus-tool-connector.js?v=1.3.0"></script>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QCOL Librería</title>
+<title>QuOLab Nexus — Library</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=JetBrains+Mono:wght@400;500&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#010608;--s:#071220;--s2:#0c1c30;--b:#0d2a4a;--b2:#1a3a5c;--bl:#0088ff;--bl2:#00ccff;--gr:#00ff88;--gd:#ffd700;--rd:#ff4466;--tx:#ddeeff;--mu:#4a7a9b;--orb:'Orbitron',monospace;--mono:'JetBrains Mono',monospace;--exo:'Exo 2',sans-serif;}
@@ -58,16 +59,16 @@ select.fi{cursor:pointer;}
 <body>
 <div class="notif" id="notif"></div>
 <div class="admin-bar" id="admin-bar">
-  👑 Modo administrador — Gestiona el contenido de la librería
-  <button class="btn btn-pri" style="margin-left:auto;" onclick="openAdd()">+ AGREGAR RECURSO</button>
+  👑 Admin mode — Manage library content
+  <button class="btn btn-pri" style="margin-left:auto;" onclick="openAdd()">+ ADD RESOURCE</button>
 </div>
 <div class="toolbar">
   <div class="search-box">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="#4a7a9b" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="#4a7a9b" stroke-width="2" stroke-linecap="round"/></svg>
-    <input id="search" placeholder="Buscar..." oninput="render()">
+    <input id="search" placeholder="Search..." oninput="render()">
   </div>
   <div class="filter-btns">
-    <button class="fbtn on" onclick="setF('all',this)">Todo</button>
+    <button class="fbtn on" onclick="setF('all',this)">All</button>
     <button class="fbtn" onclick="setF('video',this)">Videos</button>
     <button class="fbtn" onclick="setF('pdf',this)">PDFs</button>
     <button class="fbtn" onclick="setF('nb',this)">Notebooks</button>
@@ -75,31 +76,31 @@ select.fi{cursor:pointer;}
 </div>
 <div id="content"></div>
 
-<!-- MODAL AGREGAR -->
+<!-- ADD MODAL -->
 <div class="modal-ov" id="add-modal">
   <div class="modal">
-    <div class="modal-title">➕ Agregar a la Librería</div>
-    <div class="fg"><label class="fl">TIPO DE RECURSO</label>
+    <div class="modal-title">➕ Add to Library</div>
+    <div class="fg"><label class="fl">RESOURCE TYPE</label>
       <select class="fi" id="a-type">
-        <option value="pdf">📄 PDF / Documento</option>
+        <option value="pdf">📄 PDF / Document</option>
         <option value="video">🎬 Video</option>
         <option value="nb">📓 Notebook</option>
       </select>
     </div>
-    <div class="fg"><label class="fl">ÍCONO (emoji)</label><input class="fi" id="a-icon" placeholder="📘" style="width:80px;text-align:center;font-size:1.2rem;"></div>
-    <div class="fg"><label class="fl">TÍTULO</label><input class="fi" id="a-title" placeholder="Nombre del recurso"></div>
-    <div class="fg"><label class="fl">DESCRIPCIÓN</label><input class="fi" id="a-desc" placeholder="Breve descripción"></div>
-    <div class="fg"><label class="fl">URL (YouTube, PDF directo, etc.)</label><input class="fi" id="a-url" placeholder="https://..."></div>
+    <div class="fg"><label class="fl">ICON (emoji)</label><input class="fi" id="a-icon" placeholder="📘" style="width:80px;text-align:center;font-size:1.2rem;"></div>
+    <div class="fg"><label class="fl">TITLE</label><input class="fi" id="a-title" placeholder="Resource name"></div>
+    <div class="fg"><label class="fl">DESCRIPTION</label><input class="fi" id="a-desc" placeholder="Brief description"></div>
+    <div class="fg"><label class="fl">URL (YouTube, direct PDF, etc.)</label><input class="fi" id="a-url" placeholder="https://..."></div>
     <div class="btn-row">
-      <button class="btn btn-pri" onclick="addItem()">✅ Agregar</button>
-      <button class="btn-cancel" onclick="closeAdd()">Cancelar</button>
+      <button class="btn btn-pri" onclick="addItem()">✅ Add</button>
+      <button class="btn-cancel" onclick="closeAdd()">Cancel</button>
     </div>
   </div>
 </div>
 
 <script>
 let curUser=null,isAdmin=false,cfg={},filt='all';
-function postCore(t,d={}){window.parent.postMessage({type:t,...d},'*');}
+function postCore(t,d={}){const name=String(t||'').replace(/^(?:OPENQ|QCOL|NEXUS)_/,'');window.parent.postMessage({type:'NEXUS_'+name,protocol:'QUOLAB_NEXUS_V1',...d},location.origin);}
 function notify(msg){const n=document.getElementById('notif');n.textContent=msg;n.classList.add('show');clearTimeout(n._t);n._t=setTimeout(()=>n.classList.remove('show'),3000);}
 window.addEventListener('message',e=>{
   const d=e.data;if(!d?.type)return;
@@ -127,8 +128,8 @@ function render(){
   const c=document.getElementById('content');
   if(all.length===0){
     c.innerHTML=`<div class="empty"><div class="empty-icon">📚</div>
-      <div class="empty-title">${q?'Sin resultados':'Librería vacía'}</div>
-      <div class="empty-desc">${q?'Sin recursos con "'+q+'"':isAdmin?'Usa el botón + AGREGAR RECURSO para publicar el primer material.':'El administrador aún no ha publicado contenido en la librería.'}</div>
+      <div class="empty-title">${q?'No results':'Library is empty'}</div>
+      <div class="empty-desc">${q?'No resources matching "'+q+'"':isAdmin?'Use the + ADD RESOURCE button to publish the first material.':'The administrator has not yet published content in the library.'}</div>
     </div>`;return;
   }
   c.innerHTML='<div class="grid">'+all.map((item,i)=>{
@@ -140,7 +141,7 @@ function render(){
       <div class="card-title">${item.title}</div>
       <p class="card-desc">${item.desc||''}</p>
       <button class="card-open" onclick="event.stopPropagation();openItem(${i})">
-        ${item.type==='video'?'▶ VER VIDEO':item.type==='nb'?'▶ ABRIR':'📖 VER'}
+        ${item.type==='video'?'▶ VIEW VIDEO':item.type==='nb'?'▶ OPEN':'📖 VIEW'}
       </button>
       ${del}
     </div>`;
@@ -149,20 +150,20 @@ function render(){
 function openItem(i){
   const items=getItems(),item=items[i];if(!item)return;
   if(item.url){window.open(item.url,'_blank');}
-  else{notify('Sin URL configurada para: '+item.title);}
+  else{notify('No URL configured for: '+item.title);}
 }
 function delItem(i){
-  if(!isAdmin||!confirm('¿Eliminar?'))return;
-  const items=getItems();items.splice(i,1);saveItems(items);render();notify('Eliminado');
+  if(!isAdmin||!confirm('Delete?'))return;
+  const items=getItems();items.splice(i,1);saveItems(items);render();notify('Deleted');
 }
 function openAdd(){document.getElementById('add-modal').classList.add('open');}
 function closeAdd(){document.getElementById('add-modal').classList.remove('open');}
 function addItem(){
   const type=document.getElementById('a-type').value,icon=document.getElementById('a-icon').value.trim(),title=document.getElementById('a-title').value.trim(),desc=document.getElementById('a-desc').value.trim(),url=document.getElementById('a-url').value.trim();
-  if(!title){notify('El título es obligatorio');return;}
+  if(!title){notify('Title is required');return;}
   const items=getItems();
   items.push({type,icon:icon||TYPE_ICONS[type],title,desc,url,added:new Date().toLocaleDateString()});
-  saveItems(items);closeAdd();notify('✅ Recurso agregado: '+title);render();
+  saveItems(items);closeAdd();notify('✅ Resource added: '+title);render();
   ['a-icon','a-title','a-desc','a-url'].forEach(k=>document.getElementById(k).value='');
 }
 document.getElementById('add-modal').addEventListener('click',e=>{if(e.target===document.getElementById('add-modal'))closeAdd();});
