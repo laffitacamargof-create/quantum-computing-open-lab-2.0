@@ -1,0 +1,1319 @@
+{
+  "tables": [
+    {
+      "table": "quantum_ecosystem_config",
+      "schema": "public",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "key",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "value",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "updated_by",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp without time zone",
+          "default": "now()",
+          "not_null": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone",
+          "default": "now()",
+          "not_null": false
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX quantum_ecosystem_config_pkey ON public.quantum_ecosystem_config USING btree (id)",
+        "CREATE UNIQUE INDEX quantum_ecosystem_config_key_key ON public.quantum_ecosystem_config USING btree (key)"
+      ],
+      "policies": [
+        {
+          "name": "public_read_non_secret_nexus_config",
+          "check": null,
+          "roles": [
+            "anon",
+            "authenticated"
+          ],
+          "using": "(key = ANY (ARRAY['colab_url'::text, 'system_config'::text, 'platform_config'::text, 'monitor_config'::text]))",
+          "command": "SELECT"
+        }
+      ],
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "quantum_ecosystem_config_key_key",
+          "definition": "UNIQUE (key)"
+        },
+        {
+          "name": "quantum_ecosystem_config_pkey",
+          "definition": "PRIMARY KEY (id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "table": "quantum_pending_apps",
+      "schema": "public",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "tags",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "duration",
+          "type": "integer",
+          "default": "8",
+          "not_null": false
+        },
+        {
+          "name": "python_code",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "html_code",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "server_url",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "created_by",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone",
+          "default": "now()",
+          "not_null": false
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp without time zone",
+          "default": "now()",
+          "not_null": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "default": "'pending'::text",
+          "not_null": false
+        },
+        {
+          "name": "submitted_by",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "submitted_at",
+          "type": "timestamp without time zone",
+          "default": "now()",
+          "not_null": false
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX quantum_pending_apps_pkey ON public.quantum_pending_apps USING btree (id)",
+        "CREATE INDEX quantum_pending_apps_created_at_desc_idx ON public.quantum_pending_apps USING btree (created_at DESC)"
+      ],
+      "policies": null,
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "quantum_pending_apps_pkey",
+          "definition": "PRIMARY KEY (id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "table": "quantum_published_apps",
+      "schema": "public",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "tags",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "duration",
+          "type": "integer",
+          "default": "8",
+          "not_null": false
+        },
+        {
+          "name": "python_code",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "html_code",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "server_url",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "created_by",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone",
+          "default": "now()",
+          "not_null": false
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp without time zone",
+          "default": "now()",
+          "not_null": false
+        },
+        {
+          "name": "published_by",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "published_at",
+          "type": "timestamp without time zone",
+          "default": "now()",
+          "not_null": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "default": "1",
+          "not_null": false
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "default": "true",
+          "not_null": false
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX quantum_published_apps_pkey ON public.quantum_published_apps USING btree (id)"
+      ],
+      "policies": [
+        {
+          "name": "Public can read active quantum apps",
+          "check": null,
+          "roles": [
+            "anon",
+            "authenticated"
+          ],
+          "using": "(is_active = true)",
+          "command": "SELECT"
+        },
+        {
+          "name": "public_read_active_nexus_apps",
+          "check": null,
+          "roles": [
+            "anon",
+            "authenticated"
+          ],
+          "using": "(is_active IS TRUE)",
+          "command": "SELECT"
+        }
+      ],
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "quantum_published_apps_pkey",
+          "definition": "PRIMARY KEY (id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "table": "repo_items",
+      "schema": "public",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "gen_random_uuid()",
+          "not_null": true
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "slug",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        },
+        {
+          "name": "tags",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        },
+        {
+          "name": "cell_count",
+          "type": "integer",
+          "default": "0",
+          "not_null": true
+        },
+        {
+          "name": "est_minutes",
+          "type": "integer",
+          "default": "10",
+          "not_null": true
+        },
+        {
+          "name": "author_name",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        },
+        {
+          "name": "content",
+          "type": "jsonb",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "file_url",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "default": "1",
+          "not_null": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "not_null": true
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "not_null": true
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX repo_items_pkey ON public.repo_items USING btree (id)",
+        "CREATE UNIQUE INDEX repo_items_slug_uq ON public.repo_items USING btree (slug) WHERE (slug IS NOT NULL)",
+        "CREATE INDEX repo_items_kind_idx ON public.repo_items USING btree (kind, created_at DESC)",
+        "CREATE INDEX repo_items_created_at_desc_idx ON public.repo_items USING btree (created_at DESC)"
+      ],
+      "policies": [
+        {
+          "name": "repo_read",
+          "check": null,
+          "roles": [
+            "anon",
+            "authenticated"
+          ],
+          "using": "true",
+          "command": "SELECT"
+        }
+      ],
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "repo_items_kind_check",
+          "definition": "CHECK (kind = ANY (ARRAY['nb'::text, 'pdf'::text, 'video'::text]))"
+        },
+        {
+          "name": "repo_items_pkey",
+          "definition": "PRIMARY KEY (id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "table": "repo_item_keys",
+      "schema": "public",
+      "columns": [
+        {
+          "name": "item_id",
+          "type": "uuid",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "key_hash",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX repo_item_keys_pkey ON public.repo_item_keys USING btree (item_id)"
+      ],
+      "policies": null,
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "repo_item_keys_item_id_fkey",
+          "definition": "FOREIGN KEY (item_id) REFERENCES repo_items(id) ON DELETE CASCADE"
+        },
+        {
+          "name": "repo_item_keys_pkey",
+          "definition": "PRIMARY KEY (item_id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "table": "repo_admin",
+      "schema": "public",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "default": "1",
+          "not_null": true
+        },
+        {
+          "name": "key_hash",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX repo_admin_pkey ON public.repo_admin USING btree (id)"
+      ],
+      "policies": null,
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "repo_admin_id_check",
+          "definition": "CHECK (id = 1)"
+        },
+        {
+          "name": "repo_admin_pkey",
+          "definition": "PRIMARY KEY (id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "table": "quantum_app_versions",
+      "schema": "public",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "default": "nextval('quantum_app_versions_id_seq'::regclass)",
+          "not_null": true
+        },
+        {
+          "name": "app_id",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "python_code",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "html_code",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "published_by",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "published_at",
+          "type": "timestamp without time zone",
+          "default": "now()",
+          "not_null": false
+        },
+        {
+          "name": "change_notes",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX quantum_app_versions_pkey ON public.quantum_app_versions USING btree (id)",
+        "CREATE INDEX quantum_app_versions_app_version_idx ON public.quantum_app_versions USING btree (app_id, version DESC)"
+      ],
+      "policies": [
+        {
+          "name": "public_read_nexus_app_versions",
+          "check": null,
+          "roles": [
+            "anon",
+            "authenticated"
+          ],
+          "using": "true",
+          "command": "SELECT"
+        }
+      ],
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "quantum_app_versions_pkey",
+          "definition": "PRIMARY KEY (id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "table": "quolab_nexus_secret_archive",
+      "schema": "private",
+      "columns": [
+        {
+          "name": "key",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "not_null": true
+        },
+        {
+          "name": "archive_reason",
+          "type": "text",
+          "default": "'Removed from the exposed public configuration table'::text",
+          "not_null": true
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX quolab_nexus_secret_archive_pkey ON private.quolab_nexus_secret_archive USING btree (key)"
+      ],
+      "policies": null,
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "quolab_nexus_secret_archive_pkey",
+          "definition": "PRIMARY KEY (key)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "table": "repo_founder_sessions",
+      "schema": "private",
+      "columns": [
+        {
+          "name": "token_hash",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "not_null": true
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "default": null,
+          "not_null": false
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX repo_founder_sessions_pkey ON private.repo_founder_sessions USING btree (token_hash)"
+      ],
+      "policies": null,
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "repo_founder_sessions_pkey",
+          "definition": "PRIMARY KEY (token_hash)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "table": "nexus_pending_connectors",
+      "schema": "public",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "version",
+          "type": "text",
+          "default": "'0.1.0'::text",
+          "not_null": true
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        },
+        {
+          "name": "author",
+          "type": "text",
+          "default": "'anonymous'::text",
+          "not_null": true
+        },
+        {
+          "name": "perms",
+          "type": "jsonb",
+          "default": "'{}'::jsonb",
+          "not_null": true
+        },
+        {
+          "name": "requires",
+          "type": "jsonb",
+          "default": "'[]'::jsonb",
+          "not_null": true
+        },
+        {
+          "name": "ui",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        },
+        {
+          "name": "web",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        },
+        {
+          "name": "py",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "hash",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "default": "'pending'::text",
+          "not_null": true
+        },
+        {
+          "name": "reason",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        },
+        {
+          "name": "submitted_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "not_null": true
+        },
+        {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "default": null,
+          "not_null": false
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX nexus_pending_connectors_pkey ON public.nexus_pending_connectors USING btree (id)",
+        "CREATE INDEX nexus_pending_status_submitted_idx ON public.nexus_pending_connectors USING btree (status, submitted_at)"
+      ],
+      "policies": null,
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "nexus_pending_connectors_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "name": "nexus_pending_connectors_status_check",
+          "definition": "CHECK (status = ANY (ARRAY['pending'::text, 'rejected'::text]))"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "table": "nexus_published_connectors",
+      "schema": "public",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "version",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        },
+        {
+          "name": "author",
+          "type": "text",
+          "default": "'anonymous'::text",
+          "not_null": true
+        },
+        {
+          "name": "perms",
+          "type": "jsonb",
+          "default": "'{}'::jsonb",
+          "not_null": true
+        },
+        {
+          "name": "requires",
+          "type": "jsonb",
+          "default": "'[]'::jsonb",
+          "not_null": true
+        },
+        {
+          "name": "ui",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        },
+        {
+          "name": "web",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        },
+        {
+          "name": "py",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "hash",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "not_null": true
+        },
+        {
+          "name": "reviewer",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX nexus_published_connectors_pkey ON public.nexus_published_connectors USING btree (id)",
+        "CREATE INDEX nexus_published_published_idx ON public.nexus_published_connectors USING btree (published_at DESC)"
+      ],
+      "policies": [
+        {
+          "name": "nexus_published_read",
+          "check": null,
+          "roles": [
+            "anon",
+            "authenticated"
+          ],
+          "using": "true",
+          "command": "SELECT"
+        }
+      ],
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "nexus_published_connectors_pkey",
+          "definition": "PRIMARY KEY (id)"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "table": "nexus_user_profiles",
+      "schema": "public",
+      "columns": [
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "display_name",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        },
+        {
+          "name": "locale",
+          "type": "text",
+          "default": "'es'::text",
+          "not_null": true
+        },
+        {
+          "name": "role",
+          "type": "text",
+          "default": "'user'::text",
+          "not_null": true
+        },
+        {
+          "name": "account_status",
+          "type": "text",
+          "default": "'active'::text",
+          "not_null": true
+        },
+        {
+          "name": "preferences",
+          "type": "jsonb",
+          "default": "'{}'::jsonb",
+          "not_null": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "not_null": true
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "not_null": true
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX nexus_user_profiles_pkey ON public.nexus_user_profiles USING btree (user_id)",
+        "CREATE INDEX nexus_profiles_status_idx ON public.nexus_user_profiles USING btree (account_status)"
+      ],
+      "policies": [
+        {
+          "name": "Users read own Nexus profile",
+          "check": null,
+          "roles": [
+            "authenticated"
+          ],
+          "using": "((( SELECT auth.uid() AS uid) = user_id) AND (COALESCE(((( SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false))",
+          "command": "SELECT"
+        },
+        {
+          "name": "Users update own Nexus profile",
+          "check": "((( SELECT auth.uid() AS uid) = user_id) AND (COALESCE(((( SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false))",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "((( SELECT auth.uid() AS uid) = user_id) AND (COALESCE(((( SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false))",
+          "command": "UPDATE"
+        }
+      ],
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "nexus_user_profiles_account_status_check",
+          "definition": "CHECK (account_status = ANY (ARRAY['active'::text, 'suspended'::text]))"
+        },
+        {
+          "name": "nexus_user_profiles_locale_check",
+          "definition": "CHECK (locale = ANY (ARRAY['es'::text, 'en'::text, 'fr'::text, 'pt'::text, 'de'::text, 'other'::text]))"
+        },
+        {
+          "name": "nexus_user_profiles_pkey",
+          "definition": "PRIMARY KEY (user_id)"
+        },
+        {
+          "name": "nexus_user_profiles_role_check",
+          "definition": "CHECK (role = ANY (ARRAY['user'::text, 'admin'::text]))"
+        },
+        {
+          "name": "nexus_user_profiles_user_id_fkey",
+          "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "table": "nexus_user_api_connections",
+      "schema": "public",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "gen_random_uuid()",
+          "not_null": true
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "service_kind",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "provider",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "endpoint_url",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "model",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        },
+        {
+          "name": "auth_type",
+          "type": "text",
+          "default": "'none'::text",
+          "not_null": true
+        },
+        {
+          "name": "secret_ref",
+          "type": "text",
+          "default": null,
+          "not_null": false
+        },
+        {
+          "name": "display_name",
+          "type": "text",
+          "default": "''::text",
+          "not_null": true
+        },
+        {
+          "name": "enabled",
+          "type": "boolean",
+          "default": "true",
+          "not_null": true
+        },
+        {
+          "name": "config",
+          "type": "jsonb",
+          "default": "'{}'::jsonb",
+          "not_null": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "not_null": true
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "not_null": true
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX nexus_user_api_connections_pkey ON public.nexus_user_api_connections USING btree (id)",
+        "CREATE INDEX nexus_api_user_kind_idx ON public.nexus_user_api_connections USING btree (user_id, service_kind)"
+      ],
+      "policies": [
+        {
+          "name": "Users create own API connections",
+          "check": "((( SELECT auth.uid() AS uid) = user_id) AND (COALESCE(((( SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false))",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "command": "INSERT"
+        },
+        {
+          "name": "Users delete own API connections",
+          "check": null,
+          "roles": [
+            "authenticated"
+          ],
+          "using": "((( SELECT auth.uid() AS uid) = user_id) AND (COALESCE(((( SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false))",
+          "command": "DELETE"
+        },
+        {
+          "name": "Users read own API connections",
+          "check": null,
+          "roles": [
+            "authenticated"
+          ],
+          "using": "((( SELECT auth.uid() AS uid) = user_id) AND (COALESCE(((( SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false))",
+          "command": "SELECT"
+        },
+        {
+          "name": "Users update own API connections",
+          "check": "((( SELECT auth.uid() AS uid) = user_id) AND (COALESCE(((( SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false))",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "((( SELECT auth.uid() AS uid) = user_id) AND (COALESCE(((( SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false))",
+          "command": "UPDATE"
+        }
+      ],
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "nexus_api_endpoint_https",
+          "definition": "CHECK (endpoint_url ~ '^https://'::text)"
+        },
+        {
+          "name": "nexus_user_api_connections_auth_type_check",
+          "definition": "CHECK (auth_type = ANY (ARRAY['none'::text, 'bearer'::text, 'api_key'::text, 'basic'::text, 'oauth'::text]))"
+        },
+        {
+          "name": "nexus_user_api_connections_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "name": "nexus_user_api_connections_service_kind_check",
+          "definition": "CHECK (service_kind = ANY (ARRAY['ai'::text, 'cpu'::text, 'qpu'::text, 'storage'::text, 'external'::text]))"
+        },
+        {
+          "name": "nexus_user_api_connections_user_id_fkey",
+          "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+        }
+      ],
+      "rls_enabled": true
+    },
+    {
+      "table": "nexus_user_links",
+      "schema": "public",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "gen_random_uuid()",
+          "not_null": true
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "url",
+          "type": "text",
+          "default": null,
+          "not_null": true
+        },
+        {
+          "name": "link_type",
+          "type": "text",
+          "default": "'resource'::text",
+          "not_null": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "not_null": true
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "default": "now()",
+          "not_null": true
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX nexus_user_links_pkey ON public.nexus_user_links USING btree (id)",
+        "CREATE INDEX nexus_links_user_idx ON public.nexus_user_links USING btree (user_id)"
+      ],
+      "policies": [
+        {
+          "name": "Users create own links",
+          "check": "((( SELECT auth.uid() AS uid) = user_id) AND (COALESCE(((( SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false))",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "command": "INSERT"
+        },
+        {
+          "name": "Users delete own links",
+          "check": null,
+          "roles": [
+            "authenticated"
+          ],
+          "using": "((( SELECT auth.uid() AS uid) = user_id) AND (COALESCE(((( SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false))",
+          "command": "DELETE"
+        },
+        {
+          "name": "Users read own links",
+          "check": null,
+          "roles": [
+            "authenticated"
+          ],
+          "using": "((( SELECT auth.uid() AS uid) = user_id) AND (COALESCE(((( SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false))",
+          "command": "SELECT"
+        },
+        {
+          "name": "Users update own links",
+          "check": "((( SELECT auth.uid() AS uid) = user_id) AND (COALESCE(((( SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false))",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "((( SELECT auth.uid() AS uid) = user_id) AND (COALESCE(((( SELECT auth.jwt() AS jwt) ->> 'is_anonymous'::text))::boolean, false) = false))",
+          "command": "UPDATE"
+        }
+      ],
+      "force_rls": false,
+      "constraints": [
+        {
+          "name": "nexus_user_link_https",
+          "definition": "CHECK (url ~ '^https://'::text)"
+        },
+        {
+          "name": "nexus_user_links_link_type_check",
+          "definition": "CHECK (link_type = ANY (ARRAY['resource'::text, 'documentation'::text, 'api'::text, 'project'::text, 'other'::text]))"
+        },
+        {
+          "name": "nexus_user_links_pkey",
+          "definition": "PRIMARY KEY (id)"
+        },
+        {
+          "name": "nexus_user_links_user_id_fkey",
+          "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+        }
+      ],
+      "rls_enabled": true
+    }
+  ],
+  "triggers": null,
+  "migrations": [
+    {
+      "version": "20261114162031",
+      "name": "secure_quolab_nexus_public_api"
+    },
+    {
+      "version": "20261114162307",
+      "name": "fix_quantum_submit_app_search_path"
+    },
+    {
+      "version": "20261114162333",
+      "name": "remove_plaintext_secret_archive_values"
+    },
+    {
+      "version": "20261114181736",
+      "name": "harden_repo_functions_and_query_indexes"
+    },
+    {
+      "version": "20261114182310",
+      "name": "quolab_nexus_private_schema_grants"
+    },
+    {
+      "version": "20261115072252",
+      "name": "restrict_privileged_rpc_execution"
+    },
+    {
+      "version": "20261117160635",
+      "name": "secure_temporary_founder_sessions"
+    },
+    {
+      "version": "20261117160901",
+      "name": "restrict_founder_session_rpc_to_service_role"
+    },
+    {
+      "version": "20261117161534",
+      "name": "fix_founder_session_minimum_credential_length"
+    },
+    {
+      "version": "20261117194054",
+      "name": "founder_edit_published_and_pending_apps"
+    },
+    {
+      "version": "20261117194216",
+      "name": "restrict_founder_app_update_rpc_to_service_role"
+    },
+    {
+      "version": "20261117194355",
+      "name": "founder_edit_quantum_apps"
+    },
+    {
+      "version": "20261117194459",
+      "name": "restrict_app_edit_rpc_to_service_role"
+    },
+    {
+      "version": "20261118081706",
+      "name": "allow_public_read_active_quantum_published_apps"
+    },
+    {
+      "version": "20261118231452",
+      "name": "quolab_nexus_connectors_20261118"
+    },
+    {
+      "version": "20261119200318",
+      "name": "nexus_user_accounts_for_1000_users"
+    },
+    {
+      "version": "20261119200334",
+      "name": "nexus_user_rls_hardening"
+    }
+  ],
+  "captured_at": "2026-11-19T20:25:06.60512+00:00",
+  "project_ref": "rtkcfbnoqbivylejhspv",
+  "database_version": "PostgreSQL 17.6 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit"
+}

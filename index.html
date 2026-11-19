@@ -2,6 +2,7 @@
 <html lang="en" id="root">
 <head>
 <script src="quolab-nexus-core.js"></script>
+<script src="quolab-nexus-connectors-core.js"></script>
 <script defer src="quolab-nexus-agent.js?v=1.9.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -525,7 +526,7 @@ body::before{content:'';position:fixed;inset:0;
     <div class="ai-msgs" id="ai-messages">
       <div class="ai-msg bot">
         <div class="ai-lbl">QNEXUSAI</div>
-        <div class="markdown-body" id="ai-welcome">Welcome to QuOLab Nexus. I am the single autonomous agent for QuOLab Nexus. I can operate Projects, Quantum Notebook, Quantum Open Lab, Quantum Puzzle, Quantum App Studio, Library and Help directly. I plan, execute, check results and continue until your task is verified or a concrete blocker is reached. Would you like a guided tour or help with something you are working on?</div>
+        <div class="markdown-body" id="ai-welcome">Welcome to QuOLab Nexus. I am the single autonomous agent for QuOLab Nexus. I can operate Projects, Quantum Notebook, Quantum Open Lab, Quantum Puzzle, Quantum App Studio and Help directly. I plan, execute, check results and continue until your task is verified or a concrete blocker is reached. Would you like a guided tour or help with something you are working on?</div>
       </div>
     </div>
     <div class="ai-loading" id="ai-loading">
@@ -614,7 +615,7 @@ body::before{content:'';position:fixed;inset:0;
     </div>
     <div class="menu-grid" id="menu-grid"></div>
     <div class="openq-footer">
-      Founded by <span>Franci Laffita Camargo</span> · <span>Argelio Esteban Vigoa Santes</span> · Open core quantum ecosystem — built so anyone can access, build and benefit from quantum computing.
+      Founded by <span>Franci Laffita Camargo</span> · Open core quantum ecosystem — built so anyone can access, build and benefit from quantum computing.
     </div>
   </div>
 
@@ -706,31 +707,7 @@ body::before{content:'';position:fixed;inset:0;
     </div>
   </div>
 
-  <div class="screen" id="screen-library">
-    <div class="screen-hdr">
-      <button class="btn-back" onclick="QuOLabNexus.nav('home')">← MENU</button>
-      <div class="screen-title">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <path d="M4 19.5A2.5 2.5 0 016.5 17H20" stroke="#00ccff" stroke-width="1.5"/>
-          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" stroke="#00ccff" stroke-width="1.5"/>
-          <path d="M8 7h8M8 11h8M8 15h5" stroke="#00ccff" stroke-width="1"/>
-        </svg>
-        LIBRARY AND TUTORIALS
-      </div>
-      <button class="hbtn ai-btn" onclick="QuOLabNexus.toggleAI()">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="vertical-align:middle;margin-right:3px;">
-          <circle cx="12" cy="12" r="10" stroke="#00ffdd" stroke-width="1.4"/>
-          <path d="M8 12h8M12 8l4 4-4 4" stroke="#00ffdd" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="12" cy="12" r="2.5" fill="rgba(0,255,221,.2)" stroke="#00ffdd" stroke-width="1"/>
-        </svg>
-        QNexusAi
-      </button>
-    </div>
-    <div class="module-iframe-wrap" id="library-wrap">
-      <div id="library-ph"></div>
-    </div>
-  </div>
-
+<div class="screen" id="screen-nexus-connectors"><div class="screen-hdr"><button class="btn-back" onclick="QuOLabNexus.nav('home')">← MENU</button><div class="screen-title">NEXUS CONNECTORS</div><button class="hbtn ai-btn" onclick="QuOLabNexus.toggleAI()">QNexusAi</button></div><div class="module-iframe-wrap" id="nexus-connectors-wrap"><div id="nexus-connectors-ph"></div></div></div>
   <div class="screen" id="screen-account">
     <div class="screen-hdr">
       <button class="btn-back" onclick="QuOLabNexus.nav('home')">← MENU</button>
@@ -1058,7 +1035,7 @@ class QuOLabNexusConfigSyncReader {
     projects:       'quolab-nexus-projects.html',
     architect:      'quolab-nexus-architect.html',
     'architect-pro':'quolab-nexus-quantum-notebook.html',
-    library:        'quolab-nexus-library.html',
+    'nexus-connectors':'quolab-nexus-connectors.html',
     account:        'quolab-nexus-account.html',
     founder:        'quolab-nexus-founder.html',
     help:           'quolab-nexus-help.html',
@@ -1185,13 +1162,144 @@ class QuOLabNexusConfigSyncReader {
       broadcast({ type: 'OPENQ_CONFIG_UPDATED', db: data });
   }
 
+
+  // Nexus connector routing: the shell is the only broker for non-AI APIs.
+  const NXC = () => window.QuOLabNexusConnectors || null;
+  const AI_FALLBACK_KEY = 'nexus_ai_fallback_approved';
+  const TOOL_OF = { architect:'open_lab', 'architect-pro':'notebook', 'quantum-puzzle':'apps', 'quantum-app-studio':'app_studio', 'nexus-connectors':'chat' };
+  const apiSlots = Object.create(null);
+  [['architect',['cpu','qpu','storage']],['architect-pro',['cpu','storage']],['quantum-puzzle',['cpu','qpu']],['quantum-app-studio',['cpu','qpu','storage']]].forEach(item => item[1].forEach(kind => { apiSlots[item[0]+'.'+kind] = { label:item[0]+' · '+kind.toUpperCase(), founder:kind==='cpu'?'engine':'' }; }));
+  const aiFallbackApproved = () => { try { return localStorage.getItem(AI_FALLBACK_KEY) === 'yes'; } catch (_) { return false; } };
+  function aiNexusRec(tool) { const nx=NXC(); return nx && nx.Policy ? nx.Policy.pick('ai', tool || 'chat') : null; }
+  function moduleOf(win) {
+    for (const key of Object.keys(iframes)) {
+      const rootFrame = iframes[key]; if (!rootFrame || !rootFrame.contentWindow) continue;
+      let current = win, depth = 0;
+      while (current && depth++ < 8) {
+        if (current === rootFrame.contentWindow) return key;
+        try { if (current === current.parent) break; current = current.parent; } catch (_) { break; }
+      }
+    }
+    return null;
+  }
+  function founderBase(key) {
+    const slot = apiSlots[key] || {};
+    if (slot.founder === 'engine') {
+      try { return localStorage.getItem('nexus_colab_url') || localStorage.getItem('qcol_colab_url') || localStorage.getItem('openq_colab_url') || ''; } catch (_) { return ''; }
+    }
+    return /^https:\/\//i.test(slot.founder || '') ? slot.founder : '';
+  }
+  function connectorCategory(kind) {
+    return kind === 'cpu' ? 'classical' : kind === 'qpu' ? 'quantum' : kind === 'storage' ? 'storage' : null;
+  }
+  function assignedConnector(mod, kind, requested) {
+    const nx = NXC(); if (!nx) return null;
+    const value = nx.Assignments.get(mod, kind);
+    const ids = Array.isArray(value) ? value : (value && value !== 'founder' ? [value] : []);
+    const ordered = requested && ids.includes(requested)
+      ? [requested].concat(ids.filter(id => id !== requested)) : ids;
+    const expected = connectorCategory(kind);
+    for (const id of ordered) {
+      const rec = nx.Store.get(id);
+      if (rec && rec.kind === 'ext' && (!expected || (rec.ext && rec.ext.category === expected))) return rec;
+    }
+    return null;
+  }
+  function routesFor(mod) {
+    const out = {}, nx = NXC();
+    ['cpu','qpu','storage'].forEach(kind => {
+      const value = nx ? nx.Assignments.get(mod, kind) : 'founder';
+      const ids = Array.isArray(value) ? value : (value && value !== 'founder' ? [value] : []);
+      const expected = connectorCategory(kind);
+      const records = nx ? ids.map(id => nx.Store.get(id)).filter(r =>
+        r && r.kind === 'ext' && (!expected || (r.ext && r.ext.category === expected))) : [];
+      out[kind] = { source: records.length ? 'nexus' : 'founder', name: records.map(r => r.name).join(', ') || 'Founder default',
+        options: records.map(r => ({ id:r.id, name:r.name, category:r.ext.category })) };
+    });
+    return out;
+  }
+  async function aiComplete(messages, options) {
+    const o = options || {}, rec = aiNexusRec(o.tool || 'chat');
+    if (rec) {
+      try {
+        const result = await NXC().ai.chat({ tool:o.tool || 'chat', connector:rec.id, messages, max_tokens:o.tokens, temperature:o.temp });
+        return result.text;
+      } catch (error) {
+        if (!aiFallbackApproved()) throw new Error('Nexus AI connector failed: ' + (error.message || error) + '. Choose Founder default or explicitly enable founder-gateway fallback.');
+        notify('External AI connector failed; using the founder gateway as approved fallback.');
+      }
+    }
+    if (aiCfg.provider === 'gateway') return callMultiModelGateway(messages, o.tokens, o.temp);
+    return null;
+  }
+  async function handleModuleMsg(event, data) {
+    const rootMod = moduleOf(event.source); if (!rootMod) return;
+    // A nested App Studio iframe is physically inside Quantum Puzzle. Trust its
+    // declared identity only when the message really comes from that exact iframe.
+    let mod = rootMod;
+    if (data.module && TOOL_OF[data.module] && data.module !== rootMod) {
+      const puzzle = iframes['quantum-puzzle'];
+      const studio = puzzle && puzzle.contentDocument && puzzle.contentDocument.getElementById('studioIframe');
+      if (data.module !== 'quantum-app-studio' || rootMod !== 'quantum-puzzle' || !studio || event.source !== studio.contentWindow) return;
+      mod = data.module;
+    }
+    const reply = payload => { try { event.source.postMessage(payload, location.origin); } catch (_) {} };
+    if (data.type === 'OPENQ_API_REGISTER') {
+      const apiMod = mod;
+      const slot = String(data.slot || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32);
+      if (!['cpu','qpu','storage','engine','quantum'].includes(slot)) return;
+      const kind = slot === 'engine' ? 'cpu' : slot === 'quantum' ? 'qpu' : slot;
+      const founder = data.founder === 'engine' || /^https:\/\//i.test(data.founder || '') ? data.founder : '';
+      apiSlots[apiMod + '.' + kind] = { label:String(data.label || (apiMod + ' · ' + kind.toUpperCase())).slice(0,80), founder };
+      reply({ type:'OPENQ_API_ROUTES', id:data.id, routes:routesFor(apiMod) }); return;
+    }
+    if (data.type === 'OPENQ_GET_API_ROUTES') { const apiMod = mod; reply({ type:'OPENQ_API_ROUTES', id:data.id, ok:true, routes:routesFor(apiMod) }); return; }
+    if (data.type === 'OPENQ_AI_CHAT') {
+      try {
+        const messages = Array.isArray(data.messages) ? data.messages.slice(0,40) : [];
+        if (!messages.length || !messages.every(m => m && ['system','user','assistant'].includes(m.role) && typeof m.content === 'string' && m.content.length < 60000)) throw new Error('Invalid AI messages');
+        const apiMod = mod;
+        const tool = TOOL_OF[apiMod] || 'chat';
+        const text = await aiComplete(messages, { tool, tokens:data.max_tokens, temp:data.temperature });
+        const result = text == null ? await callAI(messages[messages.length-1].content, null, { historyLimit:0, systemSuffix:messages[0] && messages[0].role === 'system' ? messages[0].content : '' }) : text;
+        reply({ type:'OPENQ_AI_RESULT', id:data.id, ok:true, text:result, source:aiNexusRec(tool) ? 'nexus' : 'founder' });
+      } catch (error) { reply({ type:'OPENQ_AI_RESULT', id:data.id, ok:false, error:String(error.message || error) }); }
+      return;
+    }
+    if (data.type === 'OPENQ_API_REQUEST') {
+      const apiMod = mod;
+      const slotInput = String(data.slot || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32);
+      // Normalize legacy aliases exactly as OPENQ_API_REGISTER does.
+      const slot = slotInput === 'engine' ? 'cpu' : slotInput === 'quantum' ? 'qpu' : slotInput;
+      const key = apiMod + '.' + slot, method = String(data.method || 'GET').toUpperCase();
+      try {
+        if (!apiSlots[key]) throw new Error('Unknown API slot "' + slot + '"');
+        const nx = NXC();
+        if (!nx || typeof nx.requestAssigned !== 'function') throw new Error('Nexus Connectors broker is unavailable');
+        const result = await nx.requestAssigned({
+          moduleId:apiMod, kind:slot, tool:TOOL_OF[apiMod] || 'chat',
+          connector:data.connector, fallbackBase:founderBase(key), method,
+          path:data.path || '', headers:data.headers, body:data.body, timeout:data.timeout
+        });
+        reply({ type:'OPENQ_API_RESULT', id:data.id, ok:true, status:result.status, headers:result.headers, text:result.text, source:result.source, connector:result.connector });
+      } catch (error) { reply({ type:'OPENQ_API_RESULT', id:data.id, ok:false, error:String(error.message || error) }); }
+    }
+  }
   window.addEventListener('message', e => {
     const d = e.data; if (!d?.type) return;
     if (e.origin !== location.origin) return;
-    // Protocolo central QuOLab Nexus: acepta NEXUS_, OPENQ_ y QCOL_ durante la migración.
-    if (window.QuOLabNexusCore) Object.assign(d, window.QuOLabNexusCore.normalizeIncoming(d));
-    else if (typeof d.type === 'string' && /^(?:NEXUS|QCOL)_/.test(d.type)) d.type = 'OPENQ_' + d.type.replace(/^(?:NEXUS|QCOL)_/, '');
-    if (typeof d.key === 'string' && d.key.indexOf('qcol_') === 0) d.key = 'openq_' + d.key.slice(5);
+    // Canonicalize legacy module messages, then adapt them for the shell's established handlers.
+    if (window.QuOLabNexusCore) {
+      Object.assign(d, window.QuOLabNexusCore.normalizeIncoming(d));
+      d.type = window.QuOLabNexusCore.legacyType(d.type);
+    }
+
+    // API/AI broker: these messages must be dispatched explicitly. Without this
+    // bridge, tool requests wait for their timeout even when the HF Space is healthy.
+    if (['OPENQ_API_REGISTER','OPENQ_GET_API_ROUTES','OPENQ_API_REQUEST','OPENQ_AI_CHAT'].includes(d.type)) {
+      void handleModuleMsg(e, d);
+      return;
+    }
 
     // Enrutador central: las órdenes y respuestas de App Studio atraviesan index.html.
     if (d.type === 'OPENQ_STUDIO_COMMAND' || d.type === 'NEXUS_STUDIO_COMMAND') {
@@ -1789,7 +1897,7 @@ class QuOLabNexusConfigSyncReader {
       projects:       { icon:'📂', title:'PROJECTS',              desc:'Explore and run lab notebooks.' },
       architect:      { icon:'⚙️', title:'QUANTUM OPEN LAB',    desc:'Visual quantum circuit editor with real Python execution (Qiskit).' },
       'architect-pro':{ icon:'📓', title:'QUANTUM NOTEBOOK',       desc:'Create and edit complete quantum notebooks. Export to .ipynb. Only founders and administrators can publish to Projects.' },
-      library:        { icon:'📚', title:'LIBRARY AND TUTORIALS',  desc:'Videos, PDFs and educational notebooks.' },
+      'nexus-connectors':{ icon:'🔌', title:'NEXUS CONNECTORS', desc:'Connect AI providers, external hardware, cloud storage and optional local connectors.' },
       account:        { icon:'👤', title:'MY ACCOUNT',              desc:'Your profile and saved circuits.' },
       founder:        { icon:'👑', title:'FOUNDER PANEL',         desc:'Ecosystem configuration and management.' },
       help:           { icon:'❓', title:'HELP',                  desc:'Ecosystem usage guide.' },
@@ -1856,17 +1964,7 @@ class QuOLabNexusConfigSyncReader {
         desc:'Create and edit complete quantum notebooks. Export to .ipynb. Only founders and administrators review before publishing to Projects. It combines with Quantum Open Lab in circuit cells to create quantum algorithms without needing to program.',
         delay:.15, show:true, locked: false,
       },
-      {
-        screen:'library',
-        icon:`<svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-          <path d="M4 19.5A2.5 2.5 0 016.5 17H20" stroke="#00ccff" stroke-width="1.5"/>
-          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" stroke="#00ccff" stroke-width="1.5"/>
-          <path d="M8 7h8M8 11h8M8 15h5" stroke="#00ccff" stroke-width="1"/>
-        </svg>`,
-        title:'LIBRARY AND TUTORIALS', badge:'', badgeTxt:'',
-        desc:'Educational resources: interactive tutorials, PDFs and videos on quantum computing from fundamentals to advanced algorithms.',
-        delay:.2, show:true,
-      },
+
       {
         screen: curUser ? 'account' : null,
         onClick: curUser ? null : "QuOLabNexus.openAuth('login')",
@@ -1899,6 +1997,7 @@ class QuOLabNexusConfigSyncReader {
         desc:'Quolab ecosystem control panel. Users, compiler, AI and GitHub.',
         delay:.3, show: isF,
       },
+      { screen:'nexus-connectors', icon:'🔌', title:'NEXUS CONNECTORS', badge:'', badgeTxt:'', desc:'Manage external AI, CPU/QPU hardware, cloud storage APIs and optional local connectors with encrypted credentials and per-tool assignments.', delay:.38, show:true },
       {
         screen:'help',
         icon:`<svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -2056,7 +2155,7 @@ class QuOLabNexusConfigSyncReader {
   function isAIAvailable() {
     // The multi-provider gateway keeps provider keys server-side in Supabase;
     // an empty browser-side key is expected and must not trigger demo mode.
-    return aiCfg.provider === 'gateway' || aiCfg.provider === 'deepseek' || (!!aiCfg.key && aiCfg.provider !== 'none');
+    return !!aiNexusRec() || aiCfg.provider === 'gateway' || aiCfg.provider === 'deepseek' || (!!aiCfg.key && aiCfg.provider !== 'none');
   }
 
   function setupAI() {
@@ -2065,12 +2164,18 @@ class QuOLabNexusConfigSyncReader {
     const txt = document.getElementById('ai-stxt');
     const lbl = document.getElementById('ai-prov-lbl');
     if (isAIAvailable()) {
-      if (dot) dot.className = 'ai-status-dot ok';
-      if (txt) txt.textContent = aiCfg.provider === 'gateway'
-        ? 'QNexusAi · multi-provider gateway · 7 tools'
-        : aiCfg.provider === 'deepseek'
-          ? 'QNexusAi · DeepSeek · 7 tools'
-          : 'QNexusAi active · 7 tools';
+      const nexusRec = aiNexusRec();
+      if (nexusRec) {
+        if (dot) dot.className = 'ai-status-dot ok';
+        if (txt) txt.textContent = 'QNexusAi · Nexus connector · ' + nexusRec.name;
+      } else {
+        if (dot) dot.className = 'ai-status-dot ok';
+        if (txt) txt.textContent = aiCfg.provider === 'gateway'
+          ? 'QNexusAi · founder multi-provider gateway'
+          : aiCfg.provider === 'deepseek'
+            ? 'QNexusAi · founder DeepSeek'
+            : 'QNexusAi · founder provider active';
+      }
       if (lbl) lbl.textContent = '';
     } else {
       if (dot) dot.className = 'ai-status-dot';
@@ -2205,7 +2310,7 @@ class QuOLabNexusConfigSyncReader {
 
 
   // ═══════════════ QNexusAi: central orchestration and verified tool execution ═══════════════
-  const AI_SCREENS = ['projects','architect','architect-pro','library','help','quantum-puzzle','quantum-app-studio'];   // founder/account nunca
+  const AI_SCREENS = ['projects','architect','architect-pro','nexus-connectors','help','quantum-puzzle','quantum-app-studio'];   // founder/account nunca
   const AI_NAV_SCREENS = AI_SCREENS.filter(screen => screen !== 'quantum-app-studio');
   const AI_TARGET  = { architect: 'architect', notebook: 'architect-pro' };
   function aiOptGet(k) { try { const v = localStorage.getItem('openq_ai_' + k); return k === 'ctx' ? v !== '0' : v === '1'; } catch (e) { return k === 'ctx'; } }
@@ -2256,8 +2361,8 @@ class QuOLabNexusConfigSyncReader {
       ['architect', /quantum open lab|circuit|circuito|qubit|qiskit|simulat|compil|bloch|ruido|noise/],
       ['quantum-puzzle', /quantum puzzle|puzzle|challenge|desaf[ií]o|published app|aplicaci[oó]n publicada/],
       ['quantum-app-studio', /app studio|studio|crear app|create app|editor de app|backend de app/],
+      ['nexus-connectors', /nexus connectors|connectors|conectores|api externa|conector local|conector de ia/],
       ['projects', /project|proyecto|recurso|publicar recurso/],
-      ['library', /library|biblioteca|tutorial|pdf|video|material de estudio/],
       ['help', /help|ayuda|documentaci[oó]n|c[oó]mo funciona|how does/]
     ];
     for (const [id, pattern] of rules) if (pattern.test(text)) add(id);
@@ -2357,7 +2462,7 @@ Always end execution turns with TASK_STATUS: CONTINUE, COMPLETED or BLOCKED. COM
 
 Supported actions:
 - \`\`\`openq-action
-{"type":"nav","screen":"projects|architect|architect-pro|library|help|quantum-puzzle"}
+{"type":"nav","screen":"projects|architect|architect-pro|nexus-connectors|help|quantum-puzzle"}
 \`\`\`
 - \`\`\`openq-action
 {"type":"open_notebook|open_app","id":"ID_FROM_LIVE_CONTEXT"}
@@ -2381,9 +2486,9 @@ Supported actions:
 {"type":"noise","target":"architect|notebook","cellIndex":0,"engine":"both","shots":512,"noise":{"schema_version":"1.0","channels":[{"type":"depolarizing","p":0.01}]}}
 \`\`\`
 - \`\`\`openq-action
-{"type":"ui_action","screen":"projects|architect|architect-pro|library|help|quantum-puzzle|quantum-app-studio","operation":"click|fill|type|select|scroll|hover|key|drag","selector":"#grounded-control","value":"optional","key":"Enter","targetSelector":"#grounded-drop-target","deltaY":300}
+{"type":"ui_action","screen":"projects|architect|architect-pro|nexus-connectors|help|quantum-puzzle|quantum-app-studio","operation":"click|fill|type|select|scroll|hover|key|drag","selector":"#grounded-control","value":"optional","key":"Enter","targetSelector":"#grounded-drop-target","deltaY":300}
 \`\`\`
-Use module-specific manual instructions and live controls. Projects, Puzzle, nested App Studio, Library and Help are operated through visible UI. Never call private functions or bypass permissions. Preserve unrelated notebook cells. Save, run, export and publish are separate operations.
+Use module-specific manual instructions and live controls. Projects, Puzzle, nested App Studio, Nexus Connectors and Help are operated through visible UI. Never call private functions or bypass permissions. Preserve unrelated notebook cells. Save, run, export and publish are separate operations.
 
 CONTEXT (staged and size-limited): ${c}`;
   }
@@ -2819,6 +2924,8 @@ CONTEXT (staged and size-limited): ${c}`;
       ...(historyLimit ? aiHistory.slice(-historyLimit*2) : []),
       { role:'user', content:msg },
     ];
+    const nexusResult = await aiComplete(msgs, { tool:'chat', tokens, temp });
+    if (nexusResult !== null) return nexusResult;
     if (aiCfg.provider === 'gateway') {
       return await callMultiModelGateway(msgs, tokens, temp);
     }
